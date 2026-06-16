@@ -1,0 +1,388 @@
+{
+  "info": {
+    "name": "Gym & Fitness Management",
+    "description": "End-to-end API tests routed through the API gateway (http://localhost:8080). Run the requests top-to-bottom: Seed Admin -> Login (token auto-saved) -> create resources (ids auto-saved). RBAC is enforced at the gateway.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Seed Admin (run once)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/auth/seed-admin"
+          }
+        },
+        {
+          "name": "Register (member)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Jane Member\",\n  \"email\": \"jane@gym.com\",\n  \"password\": \"Member@2024\",\n  \"role\": \"member\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/register"
+          }
+        },
+        {
+          "name": "Login (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.token) {",
+                  "  pm.environment.set('token', json.token);",
+                  "  console.log('token saved');",
+                  "}",
+                  "pm.test('login succeeded', () => pm.response.code === 200);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@gym.com\",\n  \"password\": \"Admin@2024\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Login (member)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.token) pm.environment.set('token', json.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"jane@gym.com\",\n  \"password\": \"Member@2024\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Get Users (admin only)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/auth/users"
+          }
+        },
+        {
+          "name": "Delete User (admin only)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/auth/users/{{userId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Members",
+      "item": [
+        {
+          "name": "Create Member (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "if (j.member && j.member._id) pm.environment.set('memberId', j.member._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Jane Member\",\n  \"email\": \"jane@gym.com\",\n  \"phone\": \"012345678\",\n  \"gender\": \"female\",\n  \"address\": \"Phnom Penh\"\n}"
+            },
+            "url": "{{baseUrl}}/api/members"
+          }
+        },
+        {
+          "name": "Get Members",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/members" }
+        },
+        {
+          "name": "Get Member by ID",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/members/{{memberId}}" }
+        },
+        {
+          "name": "Update Member (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"099888777\",\n  \"status\": \"active\"\n}" },
+            "url": "{{baseUrl}}/api/members/{{memberId}}"
+          }
+        },
+        {
+          "name": "Delete Member (admin)",
+          "request": { "method": "DELETE", "header": [], "url": "{{baseUrl}}/api/members/{{memberId}}" }
+        }
+      ]
+    },
+    {
+      "name": "Membership",
+      "item": [
+        {
+          "name": "Create Plan (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "if (j.plan && j.plan._id) pm.environment.set('planId', j.plan._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Gold\",\n  \"durationMonths\": 12,\n  \"price\": 300,\n  \"description\": \"Full year access\"\n}"
+            },
+            "url": "{{baseUrl}}/api/plans"
+          }
+        },
+        {
+          "name": "Get Plans",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/plans" }
+        },
+        {
+          "name": "Get Plan by ID",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/plans/{{planId}}" }
+        },
+        {
+          "name": "Update Plan (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"price\": 280\n}" },
+            "url": "{{baseUrl}}/api/plans/{{planId}}"
+          }
+        },
+        {
+          "name": "Delete Plan (admin)",
+          "request": { "method": "DELETE", "header": [], "url": "{{baseUrl}}/api/plans/{{planId}}" }
+        },
+        {
+          "name": "Create Subscription (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "if (j.subscription && j.subscription._id) pm.environment.set('subscriptionId', j.subscription._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"memberId\": \"{{memberId}}\",\n  \"planId\": \"{{planId}}\",\n  \"paymentStatus\": \"paid\"\n}"
+            },
+            "url": "{{baseUrl}}/api/subscriptions"
+          }
+        },
+        {
+          "name": "Get Subscriptions",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/subscriptions" }
+        },
+        {
+          "name": "Get Subscriptions by Member",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/subscriptions/member/{{memberId}}" }
+        },
+        {
+          "name": "Delete Subscription (admin)",
+          "request": { "method": "DELETE", "header": [], "url": "{{baseUrl}}/api/subscriptions/{{subscriptionId}}" }
+        }
+      ]
+    },
+    {
+      "name": "Trainers",
+      "item": [
+        {
+          "name": "Create Trainer (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "if (j.trainer && j.trainer._id) pm.environment.set('trainerId', j.trainer._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Coach Sok\",\n  \"email\": \"sok@gym.com\",\n  \"specialization\": \"Strength\",\n  \"experienceYears\": 5\n}"
+            },
+            "url": "{{baseUrl}}/api/trainers"
+          }
+        },
+        {
+          "name": "Get Trainers",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/trainers" }
+        },
+        {
+          "name": "Get Trainer by ID",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/trainers/{{trainerId}}" }
+        },
+        {
+          "name": "Update Trainer (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"experienceYears\": 6\n}" },
+            "url": "{{baseUrl}}/api/trainers/{{trainerId}}"
+          }
+        },
+        {
+          "name": "Delete Trainer (admin)",
+          "request": { "method": "DELETE", "header": [], "url": "{{baseUrl}}/api/trainers/{{trainerId}}" }
+        }
+      ]
+    },
+    {
+      "name": "Workouts",
+      "item": [
+        {
+          "name": "Create Workout (admin/trainer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "if (j.workout && j.workout._id) pm.environment.set('workoutId', j.workout._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Push Day\",\n  \"description\": \"Chest and triceps\",\n  \"difficulty\": \"intermediate\",\n  \"trainerId\": \"{{trainerId}}\",\n  \"memberId\": \"{{memberId}}\",\n  \"exercises\": [\n    { \"name\": \"Bench Press\", \"sets\": 4, \"reps\": 10 },\n    { \"name\": \"Push Up\", \"sets\": 3, \"reps\": 15 }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/workouts"
+          }
+        },
+        {
+          "name": "Get Workouts",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/workouts" }
+        },
+        {
+          "name": "Get Workouts by Member",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/workouts/member/{{memberId}}" }
+        },
+        {
+          "name": "Get Workout by ID",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/workouts/{{workoutId}}" }
+        },
+        {
+          "name": "Update Workout (admin/trainer)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"difficulty\": \"advanced\"\n}" },
+            "url": "{{baseUrl}}/api/workouts/{{workoutId}}"
+          }
+        },
+        {
+          "name": "Delete Workout (admin/trainer)",
+          "request": { "method": "DELETE", "header": [], "url": "{{baseUrl}}/api/workouts/{{workoutId}}" }
+        }
+      ]
+    },
+    {
+      "name": "Attendance",
+      "item": [
+        {
+          "name": "Check In",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "if (j.record && j.record._id) pm.environment.set('attendanceId', j.record._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"memberId\": \"{{memberId}}\"\n}" },
+            "url": "{{baseUrl}}/api/attendance/checkin"
+          }
+        },
+        {
+          "name": "Check Out",
+          "request": { "method": "PUT", "header": [], "url": "{{baseUrl}}/api/attendance/checkout/{{attendanceId}}" }
+        },
+        {
+          "name": "Get Attendance",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/attendance" }
+        },
+        {
+          "name": "Get Attendance by Member",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/attendance/member/{{memberId}}" }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+services:
+  identity-service:
+    build: ./identity-service
+    ports:
+      - "4001:4001"
+    environment:
+      - PORT=4001
+      - uri=${uri}
+      - JWT_SECRET=${JWT_SECRET}
+    restart: unless-stopped
+
+  member-service:
+    build: ./member-service
+    ports:
+      - "4002:4002"
+    environment:
+      - PORT=4002
+      - uri=${uri}
+    restart: unless-stopped
+
+  membership-service:
+    build: ./membership-service
+    ports:
+      - "4003:4003"
+    environment:
+      - PORT=4003
+      - uri=${uri}
+    restart: unless-stopped
+
+  trainer-service:
+    build: ./trainer-service
+    ports:
+      - "4004:4004"
+    environment:
+      - PORT=4004
+      - uri=${uri}
+    restart: unless-stopped
+
+  workout-service:
+    build: ./workout-service
+    ports:
+      - "4005:4005"
+    environment:
+      - PORT=4005
+      - uri=${uri}
+    restart: unless-stopped
+
+  attendance-service:
+    build: ./attendance-service
+    ports:
+      - "4006:4006"
+    environment:
+      - PORT=4006
+      - uri=${uri}
+    restart: unless-stopped
+
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - JWT_SECRET=${JWT_SECRET}
+      # Service URLs use compose service names locally.
+      # On EC2, override these with each instance's IP/DNS (e.g. http://10.0.1.5:4002) — no code change.
+      - IDENTITY_URL=http://identity-service:4001
+      - MEMBER_URL=http://member-service:4002
+      - MEMBERSHIP_URL=http://membership-service:4003
+      - TRAINER_URL=http://trainer-service:4004
+      - WORKOUT_URL=http://workout-service:4005
+      - ATTENDANCE_URL=http://attendance-service:4006
+    depends_on:
+      - identity-service
+      - member-service
+      - membership-service
+      - trainer-service
+      - workout-service
+      - attendance-service
+    restart: unless-stopped
