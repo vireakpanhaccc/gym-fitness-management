@@ -1,6 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const jwt = requrie('jsonwebtoken');
+const jwt = require('jsonwebtoken');
 
 const dbConnect = require('./dbConnect');
 const User = require('./models/user');
@@ -11,6 +11,7 @@ app.use(express.json());
 dbConnect();
 
 const JWT_SECRET = process.env.JWT_SECRET
+const port = process.env.PORT;
 
 // POST /register
 app.post('/register', async (req, res) => {
@@ -26,7 +27,7 @@ app.post('/register', async (req, res) => {
     }
 });
 
-// POST /login
+// POST /login 
 app.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -34,41 +35,36 @@ app.post('/login', async (req, res) => {
         if (!user) return res.status(401).json({ message: 'Invalid credentials'});
         const match = await bcrypt.compare(password, user.password);
         if (!match) return res.status(401).json({ message: 'Invalid credentials'}); 
-        const.toke = n   
+        const token = jwt.sign(
+          { id: user._id, name: user.name, email: user.email, role: user.role },
+          JWT_SECRET,
+          { expiresIn: '24h' }
+        );
+        res.json({ message: 'Login successful', token });
     } catch (err) {
-        res
+        res.status(500).json({message: 'Login failed', error: err.message});
     }
 })
 
+// GET /users - get all users
+app.get('/users', async (req, res) => {
+    try {
+        const users = await User.find().select('-password');
+        res.json(users);
+    } catch (err) {
+        res.status(500).json({ message: 'Failed to fetch users', error: err.message });
+    }
+})
 
+// DELETE /users/:id - Delete specific user by ID
+app.delete('/users/:id', async(req, res) => {
+    try {
+        await User.findByIdAndDelete(req.params.id);
+        res.json({ message: 'User deleted successfully' });
+    } catch (err) {
+        res.status(500).json({ message: 'Failed to delete user', error: err.message });
+    }
+  });
 
-
-
-//REG API
-app.post('/reg', (req, res) => {
-  console.log("REG API EXECUTED")
-  bcrypt.hash(req.body.password, 10)
-    .then(hashedPassword => {
-      const pobj = new PersonModel({
-        id: uniqueid(1000, 9999),
-        name: req.body.name,
-        email: req.body.email,
-        password: hashedPassword,
-        mobile: req.body.mobile,
-        role: req.body.role
-      });//CLOSE PersonModel
-      
-      //INSERT/SAVE THE RECORD/DOCUMENT
-      pobj.save()
-        .then(inserteddocument => {
-          res.status(200).send('DOCUMENT INSERED IN MONGODB DATABASE');
-        })//CLOSE THEN
-        .catch(err => {
-          res.status(500).send({ message: err.message || 'Error in Employee Save ' })
-        });//CLOSE CATCH
-    })
-}//CLOSE CALLBACK FUNCTION BODY
-);//CLOSE POST METHOD
-
-// START THE EXPRESS SERVER. 5000 is the PORT NUMBER
+// START THE EXPRESS SERVER. 3001 is the PORT NUMBER
 app.listen(port, () => console.log(`EXPRESS Server Started at Port No: ${port}`));
