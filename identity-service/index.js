@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 
 const dbConnect = require('./dbConnect');
 const User = require('./models/user');
@@ -59,6 +60,9 @@ app.get('/users', async (req, res) => {
 // DELETE /users/:id - Delete specific user by ID
 app.delete('/users/:id', async(req, res) => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ message: 'Invalid user ID' });
+        }
         await User.findByIdAndDelete(req.params.id);
         res.json({ message: 'User deleted successfully' });
     } catch (err) {
