@@ -7,6 +7,15 @@ const app = express();
 app.use(express.json());
 const proxy = httpProxy.createProxyServer();
 const PORT = process.env.PORT;
+
+// Forward verified user identity to downstream services
+proxy.on('proxyReq', (proxyReq, req) => {
+    if (req.user) {
+        proxyReq.setHeader('x-user-id', req.user.id);
+        proxyReq.setHeader('x-user-role', req.user.role);
+        proxyReq.setHeader('x-user-email', req.user.email);
+    }
+});
 const JWT_SECRET = process.env.JWT_SECRET;
 
 // Middleware 
@@ -65,14 +74,30 @@ app.get('/members/:id', authToken, checkRole('admin', 'member'), proxyMember);
 app.put('/members/:id', authToken, checkRole('admin', 'member'), proxyMember);
 app.delete('/members/:id', authToken, checkRole('admin'), proxyMember);
 
-// List all trainers - protected route, admin only
-app.use('/trainers', authToken, checkRole('admin'), (req, res) => {
+// ----------------------------------------------------------------------------
+// trainer-service routes
+function proxyTrainer(req, res) {
     proxy.web(req, res, { target: `http://${process.env.TRAINER_IP}:3003` });
-});
+}
+app.get('/trainers',        authToken,                       proxyTrainer); // all roles
+app.post('/trainers',       authToken, checkRole('admin'),   proxyTrainer); // admin only
+app.get('/trainers/me',     authToken, checkRole('trainer'), proxyTrainer); // trainer + admin
+app.put('/trainers/me',     authToken, checkRole('trainer'), proxyTrainer); // trainer + admin
+app.get('/trainers/:id',    authToken,                       proxyTrainer); // all roles
+app.put('/trainers/:id',    authToken, checkRole('admin'),   proxyTrainer); // admin only
+app.delete('/trainers/:id', authToken, checkRole('admin'),   proxyTrainer); // admin only
 
-app.use('/workouts', authToken, checkRole('admin', 'trainer'), (req, res) => {
+// ----------------------------------------------------------------------------
+// workout-service routes
+function proxyWorkout(req, res) {
     proxy.web(req, res, { target: `http://${process.env.WORKOUT_IP}:3004` });
-});
+}
+app.post('/workouts',       authToken, checkRole('trainer'), proxyWorkout); // trainer + admin
+app.get('/workouts',        authToken,                       proxyWorkout); // all roles
+app.get('/workouts/my',     authToken, checkRole('trainer'), proxyWorkout); // trainer + admin
+app.get('/workouts/:id',    authToken,                       proxyWorkout); // all roles
+app.put('/workouts/:id',    authToken, checkRole('trainer'), proxyWorkout); // trainer + admin; service enforces ownership
+app.delete('/workouts/:id', authToken, checkRole('admin'),   proxyWorkout); // admin only
 
 app.use('/memberships', authToken, checkRole('admin'), (req, res) => {
     proxy.web(req, res, { target: `http://${process.env.MEMBERSHIP_IP}:3005` });
