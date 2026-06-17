@@ -29,7 +29,7 @@ The normal project flow is:
 9. Test all APIs from Postman through the API Gateway.
 10. Capture clear screenshots for documentation.
 
-The MongoDB Atlas admin account is separate from the app admin user. The MongoDB admin manages the database. The `/seed-admin` route creates an application user with role `admin` inside the `users` collection.
+The MongoDB Atlas admin account is separate from the app admin user. The MongoDB admin manages the database.
 
 ## 2. Current Grading Target
 
@@ -55,7 +55,7 @@ The point breakdown can be added in [rubric.md](rubric.md).
 | Containerization | Docker and Docker Compose |
 | Load Balancer | Nginx |
 | Cloud | AWS EC2 Ubuntu 22.04 |
-| Final scale-up option | Kubernetes with Minikube |
+<!-- | Final scale-up option | Kubernetes with Minikube | -->
 
 ## 4. Technical Architecture
 
@@ -117,30 +117,40 @@ The API Gateway is the only public API entry point.
 
 | Method | Gateway Route | Auth | Forwards To |
 | --- | --- | --- | --- |
-| POST | `/auth/register` | Public | auth-service |
-| POST | `/auth/login` | Public | auth-service |
-| GET | `/api/users` | admin | auth-service |
-| DELETE | `/api/users/:id` | admin | auth-service |
-| GET | `/api/members` | admin | member-service |
-| GET | `/api/members/:id` | member, admin | member-service |
-| PUT | `/api/members/:id` | member, admin | member-service |
-| DELETE | `/api/members/:id` | admin | member-service |
-| POST | `/api/trainers` | admin | trainer-service |
-| GET | `/api/trainers` | all roles | trainer-service |
-| PUT | `/api/trainers/:id` | trainer, admin | trainer-service |
-| DELETE | `/api/trainers/:id` | admin | trainer-service |
-| POST | `/api/workouts` | trainer, admin | workout-service |
-| GET | `/api/workouts` | all roles | workout-service |
-| PUT | `/api/workouts/:id` | trainer, admin | workout-service |
-| DELETE | `/api/workouts/:id` | admin | workout-service |
-| POST | `/api/plans` | admin | membership-service |
-| GET | `/api/plans` | all roles | membership-service |
-| PUT | `/api/plans/:id` | admin | membership-service |
-| DELETE | `/api/plans/:id` | admin | membership-service |
-| POST | `/api/checkin` | member, admin | attendance-service |
-| PUT | `/api/checkout/:id` | member, admin | attendance-service |
-| GET | `/api/attendance/:memberId` | member, admin | attendance-service |
-| GET | `/api/attendance` | admin | attendance-service |
+| POST | `/register` | admin | auth-service |
+| POST | `/login` | Public | auth-service |
+| GET | `/users` | admin | auth-service |
+| DELETE | `/users/:id` | admin | auth-service |
+| POST | `/members` | admin | member-service |
+| GET | `/members` | admin | member-service |
+| GET | `/members/me` | member | member-service |
+| PUT | `/members/me` | member | member-service |
+| GET | `/members/:id` | admin | member-service |
+| PUT | `/members/:id` | admin | member-service |
+| DELETE | `/members/:id` | admin | member-service |
+| POST | `/trainers` | admin | trainer-service |
+| GET | `/trainers` | all roles | trainer-service |
+| GET | `/trainers/me` | trainer | trainer-service |
+| PUT | `/trainers/me` | trainer | trainer-service |
+| GET | `/trainers/:id` | all roles | trainer-service |
+| PUT | `/trainers/:id` | admin | trainer-service |
+| DELETE | `/trainers/:id` | admin | trainer-service |
+| POST | `/workouts` | trainer, admin | workout-service |
+| GET | `/workouts` | all roles | workout-service |
+| GET | `/workouts/my` | trainer | workout-service |
+| GET | `/workouts/:id` | all roles | workout-service |
+| PUT | `/workouts/:id` | trainer, admin | workout-service |
+| DELETE | `/workouts/:id` | admin | workout-service |
+| POST | `/plans` | admin | membership-service |
+| GET | `/plans` | all roles | membership-service |
+| PUT | `/plans/:id` | admin | membership-service |
+| DELETE | `/plans/:id` | admin | membership-service |
+| POST | `/checkin` | member, admin | attendance-service |
+| PUT | `/checkout/me` | member | attendance-service |
+| PUT | `/checkout/:id` | admin | attendance-service |
+| GET | `/attendance/me` | member | attendance-service |
+| GET | `/attendance/member/:memberId` | trainer, admin | attendance-service |
+| GET | `/attendance` | admin | attendance-service |
 
 ## 7. Role Authorization Rules
 
@@ -158,6 +168,10 @@ Rules:
 2. `trainer` can access trainer-level routes and public/all-role routes.
 3. `member` can access member-level routes and public/all-role routes.
 4. A token from one role must not work for a route restricted to another higher role.
+5. Role authorization is not enough for user-owned records. Member and trainer self-service routes must use `/me` or must verify ownership inside the target service.
+6. MongoDB `_id` values are safe for admin-managed routes, but normal members should not need to know their member profile `_id`.
+7. The API Gateway should forward the authenticated user's identity to services after JWT verification, for example `x-user-id`, `x-user-role`, and `x-user-email`.
+8. Services must never trust a client-supplied `userId`, `memberId`, or `trainerId` for ownership decisions. They should use the verified identity forwarded by the gateway.
 
 Required security screenshots:
 
@@ -166,6 +180,11 @@ Required security screenshots:
 | Wrong email/password on login | `401 Invalid credentials` |
 | Fake or invalid token on protected route | `403 Invalid token` or `401 Unauthorized` |
 | Member token on admin route | `403 Unauthorized` |
+| Member token requesting `/members/:id` | `403 Unauthorized` because arbitrary member IDs are admin-only |
+| Member token requesting `/members/me` | Own profile only |
+| Member token requesting `/checkout/:id` | `403 Unauthorized` because arbitrary checkout IDs are admin-only |
+| Member token requesting `/checkout/me` | Closes their own latest open attendance record |
+| Trainer token updating someone else's workout | `403 Unauthorized` unless the workout belongs to that trainer |
 
 ## 8. Microservice APIs
 
@@ -177,25 +196,56 @@ Required security screenshots:
 | POST | `/login` | Public | Verify password and return JWT |
 | GET | `/users` | admin | Get all users without passwords |
 | DELETE | `/users/:id` | admin | Delete a user |
-| POST | `/seed-admin` | Public temporary route | Create first app admin, remove or protect after use |
+
+JWT payload should include the MongoDB user `_id`:
+
+```js
+{
+  id: user._id,
+  name: user.name,
+  email: user.email,
+  role: user.role
+}
+```
 
 ### 8.2 Member Service
 
 | Method | Route | Auth | Description |
 | --- | --- | --- | --- |
+| POST | `/members` | admin | Create a member profile for a registered user |
 | GET | `/members` | admin | List all members |
-| GET | `/members/:id` | member, admin | Get one member profile |
-| PUT | `/members/:id` | member, admin | Update profile or plan |
+| GET | `/members/me` | member | Get the logged-in member's own profile using JWT user ID |
+| PUT | `/members/me` | member | Update the logged-in member's own allowed profile fields |
+| GET | `/members/:id` | admin | Get one member profile by MongoDB member `_id` |
+| PUT | `/members/:id` | admin | Update any member profile or plan by MongoDB member `_id` |
 | DELETE | `/members/:id` | admin | Remove member |
+
+Member ownership rule:
+
+1. `members._id` is the MongoDB ID of the member profile document.
+2. `members.userId` stores the MongoDB `_id` of the auth user from the `users` collection.
+3. A member should use `/members/me`; the service finds the profile with `Member.findOne({ userId: req.user.id })`.
+4. A member must not call `/members/:id` because that exposes arbitrary member document IDs.
 
 ### 8.3 Trainer Service
 
 | Method | Route | Auth | Description |
 | --- | --- | --- | --- |
-| POST | `/trainers` | admin | Add new trainer |
 | GET | `/trainers` | all roles | List all trainers |
-| PUT | `/trainers/:id` | trainer, admin | Update trainer info |
+| POST | `/trainers` | admin | Create a trainer profile for a registered trainer user |
+| GET | `/trainers/me` | trainer | Get the logged-in trainer's own profile using JWT user ID |
+| PUT | `/trainers/me` | trainer | Update the logged-in trainer's own allowed profile fields |
+| GET | `/trainers/:id` | all roles | View one trainer's public profile by MongoDB trainer `_id` |
+| PUT | `/trainers/:id` | admin | Update any trainer profile by MongoDB trainer `_id` |
 | DELETE | `/trainers/:id` | admin | Remove trainer |
+
+Trainer ownership rule:
+
+1. `trainers._id` is the MongoDB ID of the trainer profile document.
+2. `trainers.userId` stores the MongoDB `_id` of the auth user from the `users` collection.
+3. A trainer should use `/trainers/me`; the service finds the profile with `Trainer.findOne({ userId: req.user.id })`.
+4. `GET /trainers/:id` can be available to all roles because it is public trainer profile data.
+5. Trainers must not update arbitrary `/trainers/:id`; admin uses `:id`, trainers use `/me`.
 
 ### 8.4 Workout Service
 
@@ -203,8 +253,17 @@ Required security screenshots:
 | --- | --- | --- | --- |
 | POST | `/workouts` | trainer, admin | Create workout plan |
 | GET | `/workouts` | all roles | List all workouts |
-| PUT | `/workouts/:id` | trainer, admin | Update workout |
+| GET | `/workouts/my` | trainer | List workouts created by the logged-in trainer |
+| GET | `/workouts/:id` | all roles | View one workout by MongoDB workout `_id` |
+| PUT | `/workouts/:id` | trainer, admin | Update workout; trainer must own the workout |
 | DELETE | `/workouts/:id` | admin | Delete workout |
+
+Workout ownership rule:
+
+1. `workouts._id` is the MongoDB ID of the workout document.
+2. `workouts.trainerId` stores the MongoDB `_id` of the trainer profile or trainer auth user, depending on the final implementation choice.
+3. A trainer can update a workout only if the workout belongs to that trainer.
+4. Admin can update or delete any workout by MongoDB workout `_id`.
 
 ### 8.5 Membership Service
 
@@ -219,12 +278,26 @@ Required security screenshots:
 
 | Method | Route | Auth | Description |
 | --- | --- | --- | --- |
-| POST | `/checkin` | member, admin | Log gym entry |
-| PUT | `/checkout/:id` | member, admin | Log gym exit |
-| GET | `/attendance/:memberId` | member, admin | View member visit history |
+| POST | `/checkin` | member, admin | Log gym entry; member creates only their own record |
+| PUT | `/checkout/me` | member | Log gym exit for the logged-in member's latest open attendance record |
+| PUT | `/checkout/:id` | admin | Log gym exit by MongoDB attendance record `_id` |
+| GET | `/attendance/me` | member | View the logged-in member's own visit history |
+| GET | `/attendance/member/:memberId` | trainer, admin | View one member's visit history by MongoDB member `_id` |
 | GET | `/attendance` | admin | View all attendance logs |
 
+Attendance ownership rule:
+
+1. `attendances._id` is the MongoDB ID of the attendance record.
+2. `attendances.memberId` stores the MongoDB `_id` of the member profile.
+3. A member checks out with `/checkout/me`; the service finds the latest attendance record where `memberId` is the logged-in member profile and `checkOut` is empty.
+4. Admin can use `/checkout/:id` when manually closing a specific attendance record.
+5. A member views history with `/attendance/me`; trainer/admin can use `/attendance/member/:memberId`.
+
 ## 9. MongoDB Collections and Schemas
+
+MongoDB creates `_id` automatically for every document. This project uses that `_id` as the route ID for admin-managed routes such as `/users/:id`, `/members/:id`, `/trainers/:id`, `/workouts/:id`, `/plans/:id`, and admin-only `/checkout/:id`.
+
+For relationships between collections, store the referenced document's MongoDB `_id`. In Mongoose this can be `mongoose.Schema.Types.ObjectId`; if stored as `String` in the current simple implementation, it must still contain the MongoDB `_id` value.
 
 ### 9.1 `users` Collection
 
@@ -250,7 +323,7 @@ Notes:
 
 ```js
 {
-  userId: String,
+  userId: ObjectId,
   name: String,
   phone: String,
   plan: String,
@@ -263,7 +336,8 @@ Notes:
 
 | Field | Purpose |
 | --- | --- |
-| `userId` | User ID from JWT or auth user |
+| `_id` | MongoDB member profile ID used by admin routes |
+| `userId` | MongoDB user `_id` from the auth `users` collection |
 | `plan` | `basic`, `premium`, or `vip` |
 | `isActive` | Whether the member account is active |
 
@@ -271,6 +345,7 @@ Notes:
 
 ```js
 {
+  userId: ObjectId,
   name: String,
   specialization: String,
   bio: String,
@@ -280,12 +355,20 @@ Notes:
 }
 ```
 
+Notes:
+
+| Field | Purpose |
+| --- | --- |
+| `_id` | MongoDB trainer profile ID used by admin routes and public trainer viewing |
+| `userId` | MongoDB user `_id` from the auth `users` collection |
+| `isAvailable` | Whether the trainer is available for assignment or booking |
+
 ### 9.4 `workouts` Collection
 
 ```js
 {
   title: String,
-  trainerId: String,
+  trainerId: ObjectId,
   description: String,
   difficulty: String,
   targetMuscle: String,
@@ -304,6 +387,8 @@ Notes:
 
 | Field | Purpose |
 | --- | --- |
+| `_id` | MongoDB workout ID |
+| `trainerId` | MongoDB trainer profile `_id` or trainer user `_id`; choose one and use it consistently |
 | `difficulty` | `beginner`, `intermediate`, or `advanced` |
 | `targetMuscle` | `chest`, `back`, `legs`, `arms`, or `full body` |
 
@@ -323,6 +408,7 @@ Notes:
 
 | Field | Purpose |
 | --- | --- |
+| `_id` | MongoDB membership plan ID used by admin routes |
 | `name` | `basic`, `premium`, or `vip` |
 | `duration` | Duration in months |
 
@@ -330,7 +416,7 @@ Notes:
 
 ```js
 {
-  memberId: String,
+  memberId: ObjectId,
   checkIn: Date,
   checkOut: Date,
   duration: Number
@@ -341,7 +427,8 @@ Notes:
 
 | Field | Purpose |
 | --- | --- |
-| `memberId` | Member ID from JWT or request |
+| `_id` | MongoDB attendance record ID used for checkout |
+| `memberId` | MongoDB member profile `_id`; for member routes, resolve it from the logged-in user's profile |
 | `duration` | Calculated in minutes on checkout |
 
 ## 10. EC2 Deployment Split
@@ -428,7 +515,7 @@ Load balancer proof:
 
 1. Run both member-service instances on EC2 #2.
 2. Configure the API Gateway member-service target to use `http://localhost:8081`.
-3. Send repeated Postman requests to `/api/members` through public port `80`.
+3. Send repeated Postman requests to `/members` through public port `80`.
 4. Check logs for both member-service containers.
 5. Capture screenshots showing traffic reached both instances.
 
