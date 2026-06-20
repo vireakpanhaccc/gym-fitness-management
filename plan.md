@@ -18,7 +18,7 @@ The app has three roles:
 
 The normal project flow is:
 
-1. Create the first app admin using `/seed-admin`.
+1. Start with an existing app admin account.
 2. Log in as admin and receive a JWT token.
 3. Register member and trainer users.
 4. Manage member profiles.
@@ -137,7 +137,7 @@ The API Gateway is the only public API entry point.
 | DELETE | `/trainers/:id` | admin | trainer-service |
 | POST | `/workouts` | trainer, admin | workout-service |
 | GET | `/workouts` | all roles | workout-service |
-| GET | `/workouts/my` | trainer | workout-service |
+| GET | `/workouts/my` | trainer, admin | workout-service |
 | GET | `/workouts/:id` | all roles | workout-service |
 | PUT | `/workouts/:id` | trainer, admin | workout-service |
 | DELETE | `/workouts/:id` | admin | workout-service |
@@ -149,7 +149,7 @@ The API Gateway is the only public API entry point.
 | PUT | `/checkout/me` | member | attendance-service |
 | PUT | `/checkout/:id` | admin | attendance-service |
 | GET | `/attendance/me` | member | attendance-service |
-| GET | `/attendance/member/:memberId` | trainer, admin | attendance-service |
+| GET | `/attendance/:memberId` | trainer, admin | attendance-service |
 | GET | `/attendance` | admin | attendance-service |
 
 ## 7. Role Authorization Rules
@@ -157,18 +157,20 @@ The API Gateway is the only public API entry point.
 The gateway should use role middleware similar to:
 
 ```text
-authRole('member')  -> passes for member and admin
-authRole('trainer') -> passes for trainer and admin
-authRole('admin')   -> passes for admin only
+authRole('member')           -> passes for member only
+authRole('trainer')          -> passes for trainer only
+authRole('admin')            -> passes for admin only
+authRole('member', 'admin')  -> passes for member or admin
+authRole('trainer', 'admin') -> passes for trainer or admin
 ```
 
 Rules:
 
-1. `admin` can access any route.
+1. `admin` can access admin-managed routes and routes where `admin` is explicitly listed.
 2. `trainer` can access trainer-level routes and public/all-role routes.
 3. `member` can access member-level routes and public/all-role routes.
 4. A token from one role must not work for a route restricted to another higher role.
-5. Role authorization is not enough for user-owned records. Member and trainer self-service routes must use `/me` or must verify ownership inside the target service.
+5. Owner self-service routes such as `/members/me`, `/trainers/me`, `/checkout/me`, and `/attendance/me` are role-specific because they depend on the authenticated user's own `x-user-id`.
 6. MongoDB `_id` values are safe for admin-managed routes, but normal members should not need to know their member profile `_id`.
 7. The API Gateway should forward the authenticated user's identity to services after JWT verification, for example `x-user-id`, `x-user-role`, and `x-user-email`.
 8. Services must never trust a client-supplied `userId`, `memberId`, or `trainerId` for ownership decisions. They should use the verified identity forwarded by the gateway.
@@ -253,7 +255,7 @@ Trainer ownership rule:
 | --- | --- | --- | --- |
 | POST | `/workouts` | trainer, admin | Create workout plan |
 | GET | `/workouts` | all roles | List all workouts |
-| GET | `/workouts/my` | trainer | List workouts created by the logged-in trainer |
+| GET | `/workouts/my` | trainer, admin | List workouts created by the logged-in trainer |
 | GET | `/workouts/:id` | all roles | View one workout by MongoDB workout `_id` |
 | PUT | `/workouts/:id` | trainer, admin | Update workout; trainer must own the workout |
 | DELETE | `/workouts/:id` | admin | Delete workout |
@@ -282,7 +284,7 @@ Workout ownership rule:
 | PUT | `/checkout/me` | member | Log gym exit for the logged-in member's latest open attendance record |
 | PUT | `/checkout/:id` | admin | Log gym exit by MongoDB attendance record `_id` |
 | GET | `/attendance/me` | member | View the logged-in member's own visit history |
-| GET | `/attendance/member/:memberId` | trainer, admin | View one member's visit history by MongoDB member `_id` |
+| GET | `/attendance/:memberId` | trainer, admin | View one member's visit history by MongoDB member `_id` |
 | GET | `/attendance` | admin | View all attendance logs |
 
 Attendance ownership rule:
@@ -291,7 +293,7 @@ Attendance ownership rule:
 2. `attendances.memberId` stores the MongoDB `_id` of the member profile.
 3. A member checks out with `/checkout/me`; the service finds the latest attendance record where `memberId` is the logged-in member profile and `checkOut` is empty.
 4. Admin can use `/checkout/:id` when manually closing a specific attendance record.
-5. A member views history with `/attendance/me`; trainer/admin can use `/attendance/member/:memberId`.
+5. A member views history with `/attendance/me`; trainer/admin can`.
 
 ## 9. MongoDB Collections and Schemas
 
@@ -571,7 +573,7 @@ MONGO_URI=mongodb+srv://admin:<password>@gym-fitness-cluster.ayrgmkz.mongodb.net
 
 | Phase | Work |
 | --- | --- |
-| Phase 1 | Finish Auth Service in `identity-service/index.js`, including register, login, JWT, users, seed-admin |
+| Phase 1 | Finish Auth Service in `identity-service/index.js`, including register, login, JWT, and users |
 | Phase 2 | Build API Gateway with `http-proxy`, token middleware, and role middleware |
 | Phase 3 | Implement member-service and trainer-service |
 | Phase 4 | Implement workout-service, membership-service, and attendance-service |
