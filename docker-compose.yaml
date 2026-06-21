@@ -1,0 +1,113 @@
+# Local Docker Compose stack for the Gym & Fitness Membership App.
+#
+# Public entry point is Nginx on http://localhost (port 80), which forwards
+# every request to the API Gateway. The gateway verifies JWT + role and proxies
+# to the correct microservice. Member traffic is load balanced by Nginx across
+# two member-service instances (member-service-1 / member-service-2).
+#
+# Values for MONGO_URI and JWT_SECRET come from the root .env file
+# (copy .env.example to .env and fill in your MongoDB Atlas credentials).
+
+services:
+  # ---- Registration / Login microservice ----
+  identity-service:
+    build: ./identity-service
+    environment:
+      PORT: 3001
+      uri: ${MONGO_URI}
+      MONGO_URI: ${MONGO_URI}
+      JWT_SECRET: ${JWT_SECRET}
+    restart: unless-stopped
+
+  # ---- Member microservice: two instances for load balancing ----
+  member-service-1:
+    build: ./member-service
+    environment:
+      PORT: 3002
+      uri: ${MONGO_URI}
+      MONGO_URI: ${MONGO_URI}
+      INSTANCE: member-service-1
+    restart: unless-stopped
+
+  member-service-2:
+    build: ./member-service
+    environment:
+      PORT: 3002
+      uri: ${MONGO_URI}
+      MONGO_URI: ${MONGO_URI}
+      INSTANCE: member-service-2
+    restart: unless-stopped
+
+  # ---- Trainer microservice ----
+  trainer-service:
+    build: ./trainer-service
+    environment:
+      PORT: 3003
+      uri: ${MONGO_URI}
+      MONGO_URI: ${MONGO_URI}
+    restart: unless-stopped
+
+  # ---- Workout microservice ----
+  workout-service:
+    build: ./workout-service
+    environment:
+      PORT: 3004
+      uri: ${MONGO_URI}
+      MONGO_URI: ${MONGO_URI}
+    restart: unless-stopped
+
+  # ---- Membership (plans) microservice ----
+  membership-service:
+    build: ./membership-service
+    environment:
+      PORT: 3005
+      uri: ${MONGO_URI}
+      MONGO_URI: ${MONGO_URI}
+    restart: unless-stopped
+
+  # ---- Attendance microservice ----
+  attendance-service:
+    build: ./attendance-service
+    environment:
+      PORT: 3006
+      uri: ${MONGO_URI}
+      MONGO_URI: ${MONGO_URI}
+    restart: unless-stopped
+
+  # ---- API Gateway: single point of entry, JWT verification + RBAC ----
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "3000:3000"            # exposed for direct testing; production traffic uses Nginx :80
+    environment:
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET}
+      IDENTITY_IP: identity-service
+      MEMBER_IP: member-service-1          # fallback if MEMBER_LB_URL is unset
+      MEMBER_LB_URL: http://nginx:8081     # member routes go through the Nginx load balancer
+      TRAINER_IP: trainer-service
+      WORKOUT_IP: workout-service
+      MEMBERSHIP_IP: membership-service
+      ATTENDANCE_IP: attendance-service
+    depends_on:
+      - identity-service
+      - member-service-1
+      - member-service-2
+      - trainer-service
+      - workout-service
+      - membership-service
+      - attendance-service
+    restart: unless-stopped
+
+  # ---- Nginx: public entry (:80 -> gateway) + member load balancer (:8081) ----
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api-gateway
+      - member-service-1
+      - member-service-2
+    restart: unless-stopped

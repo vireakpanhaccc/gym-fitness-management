@@ -78,8 +78,12 @@ app.delete('/users/:id', authToken, checkRole('admin'), (req, res) => {
 
 // ----------------------------------------------------------------------------
 // 2. member-service routes
+// Member traffic goes through the internal Nginx load balancer when
+// MEMBER_LB_URL is set (e.g. http://nginx:8081), otherwise straight to a
+// single member-service instance.
 function proxyMember(req, res) {
-    proxy.web(req, res, { target: `http://${process.env.MEMBER_IP}:3002` });
+    const target = process.env.MEMBER_LB_URL || `http://${process.env.MEMBER_IP}:3002`;
+    proxy.web(req, res, { target });
 }
 
 app.get('/members',        authToken, checkRole('admin'), proxyMember);

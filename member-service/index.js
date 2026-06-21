@@ -10,6 +10,14 @@ app.use(express.json());
 dbConnect();
 
 const port = process.env.PORT;
+const instance = process.env.INSTANCE || 'member-service';
+
+// Request logger — prints which instance handled the request so load
+// balancing across member-service-1 / member-service-2 is visible in logs.
+app.use((req, _res, next) => {
+    console.log(`[${instance}] ${req.method} ${req.originalUrl}`);
+    next();
+});
 
 // GET /members - list all members
 app.get('/members', async (req, res) => {
@@ -28,6 +36,41 @@ app.post('/members', async (req, res) => {
         res.status(201).json({ message: 'Member created successfully', member });
     } catch (err) {
         res.status(500).json({ message: 'Failed to create member', error: err.message });
+    }
+});
+
+// GET /members/me - get the logged-in member's own profile (member role)
+// Must be declared before /members/:id so "me" is not treated as an :id.
+app.get('/members/me', async (req, res) => {
+    try {
+        const userId = req.headers['x-user-id'];
+        const member = await Member.findOne({ userId });
+        if (!member) return res.status(404).json({ message: 'Member profile not found' });
+        res.json(member);
+    } catch (err) {
+        res.status(500).json({ message: 'Failed to fetch member profile', error: err.message });
+    }
+});
+
+// PUT /members/me - update the logged-in member's own allowed fields (member role)
+// Members may only change name and phone; plan/isActive remain admin-managed.
+app.put('/members/me', async (req, res) => {
+    try {
+        const userId = req.headers['x-user-id'];
+        const { name, phone } = req.body;
+        const updates = {};
+        if (name !== undefined) updates.name = name;
+        if (phone !== undefined) updates.phone = phone;
+
+        const member = await Member.findOneAndUpdate({ userId }, updates, {
+            new: true,
+            runValidators: true
+        });
+        if (!member) return res.status(404).json({ message: 'Member profile not found' });
+
+        res.json({ message: 'Member profile updated successfully', member });
+    } catch (err) {
+        res.status(500).json({ message: 'Failed to update member profile', error: err.message });
     }
 });
 

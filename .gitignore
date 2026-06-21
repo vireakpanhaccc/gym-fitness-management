@@ -13,9 +13,6 @@
 .DS_Store
 Thumbs.db
 
-# Docker
-**/.dockerignore
-
 # IDE
 .vscode/
 .idea/
