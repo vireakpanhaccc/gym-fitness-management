@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 
 const dbConnect = require('./dbConnect');
 const Attendance = require('./models/attendance');
+const Member = require('./models/member');
 require('dotenv').config();
 
 const app = express();
@@ -15,12 +16,28 @@ function calculateDurationMinutes(checkIn, checkOut) {
     return Math.max(0, Math.ceil((checkOut.getTime() - checkIn.getTime()) / 60000));
 }
 
+async function getMemberIdForRequest(req) {
+    const role = req.headers['x-user-role'];
+
+    if (role === 'admin') {
+        return req.body.memberId;
+    }
+
+    const userId = req.headers['x-user-id'];
+    if (!userId) {
+        return null;
+    }
+
+    const member = await Member.findOne({ userId });
+    return member ? member._id.toString() : null;
+}
+
 // POST /checkin - log gym entry for a member
 app.post('/checkin', async (req, res) => {
     try {
-        const memberId = req.body.memberId || req.headers['x-member-id'] || req.headers['x-user-id'];
+        const memberId = await getMemberIdForRequest(req);
         if (!memberId) {
-            return res.status(400).json({ message: 'memberId is required' });
+            return res.status(400).json({ message: 'Member profile not found or memberId is required' });
         }
 
         const openAttendance = await Attendance.findOne({ memberId, checkOut: { $exists: false } });
@@ -38,9 +55,9 @@ app.post('/checkin', async (req, res) => {
 // PUT /checkout/me - close the logged-in member's latest open attendance record
 app.put('/checkout/me', async (req, res) => {
     try {
-        const memberId = req.body.memberId || req.headers['x-member-id'] || req.headers['x-user-id'];
+        const memberId = await getMemberIdForRequest(req);
         if (!memberId) {
-            return res.status(400).json({ message: 'memberId is required' });
+            return res.status(400).json({ message: 'Member profile not found' });
         }
 
         const attendance = await Attendance.findOne({ memberId, checkOut: { $exists: false } })
@@ -89,9 +106,9 @@ app.put('/checkout/:id', async (req, res) => {
 // GET /attendance/me - view the logged-in member's visit history
 app.get('/attendance/me', async (req, res) => {
     try {
-        const memberId = req.headers['x-member-id'] || req.headers['x-user-id'];
+        const memberId = await getMemberIdForRequest(req);
         if (!memberId) {
-            return res.status(400).json({ message: 'memberId is required' });
+            return res.status(400).json({ message: 'Member profile not found' });
         }
 
         const attendance = await Attendance.find({ memberId }).sort({ checkIn: -1 });
