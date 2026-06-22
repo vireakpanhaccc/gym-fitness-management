@@ -104,8 +104,20 @@ services:
     image: nginx:1.27-alpine
     ports:
       - "80:80"
+    environment:
+      NGINX_RESOLVER: 127.0.0.11
+      API_GATEWAY_HOST: api-gateway
+      API_GATEWAY_PORT: 3000
+      MEMBER_SERVICE_1_HOST: member-service-1
+      MEMBER_SERVICE_1_PORT: 3002
+      MEMBER_SERVICE_2_HOST: member-service-2
+      MEMBER_SERVICE_2_PORT: 3002
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf.template:ro
+    command: >
+      sh -c "envsubst '$$NGINX_RESOLVER $$API_GATEWAY_HOST $$API_GATEWAY_PORT $$MEMBER_SERVICE_1_HOST $$MEMBER_SERVICE_1_PORT $$MEMBER_SERVICE_2_HOST $$MEMBER_SERVICE_2_PORT'
+      < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
+      && nginx -g 'daemon off;'"
     depends_on:
       - api-gateway
       - member-service-1
