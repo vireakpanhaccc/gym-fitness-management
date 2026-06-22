@@ -12,24 +12,13 @@ dbConnect();
 const port = process.env.PORT;
 const instance = process.env.INSTANCE || 'member-service';
 
-// Request logger — prints which instance handled the request so load
-// balancing across member-service-1 / member-service-2 is visible in logs.
+// Request logger for load-balancer proof.
 app.use((req, _res, next) => {
     console.log(`[${instance}] ${req.method} ${req.originalUrl}`);
     next();
 });
 
-// GET /members - list all members
-app.get('/members', async (req, res) => {
-    try {
-        const members = await Member.find();
-        res.json(members);
-    } catch (err) {
-        res.status(500).json({ message: 'Failed to fetch members', error: err.message });
-    }
-});
-
-// POST /members - create a member profile
+// POST /members - create member profile (admin only, enforced at gateway)
 app.post('/members', async (req, res) => {
     try {
         const member = await Member.create(req.body);
@@ -39,8 +28,17 @@ app.post('/members', async (req, res) => {
     }
 });
 
-// GET /members/me - get the logged-in member's own profile (member role)
-// Must be declared before /members/:id so "me" is not treated as an :id.
+// GET /members - list all members (admin only, enforced at gateway)
+app.get('/members', async (req, res) => {
+    try {
+        const members = await Member.find();
+        res.json(members);
+    } catch (err) {
+        res.status(500).json({ message: 'Failed to fetch members', error: err.message });
+    }
+});
+
+// GET /members/me - get logged-in member's own profile (member role)
 app.get('/members/me', async (req, res) => {
     try {
         const userId = req.headers['x-user-id'];
@@ -52,8 +50,7 @@ app.get('/members/me', async (req, res) => {
     }
 });
 
-// PUT /members/me - update the logged-in member's own allowed fields (member role)
-// Members may only change name and phone; plan/isActive remain admin-managed.
+// PUT /members/me - update logged-in member's own allowed fields (member role)
 app.put('/members/me', async (req, res) => {
     try {
         const userId = req.headers['x-user-id'];
@@ -74,7 +71,7 @@ app.put('/members/me', async (req, res) => {
     }
 });
 
-// GET /members/:id - get one member profile
+// GET /members/:id - view one member profile (admin only, enforced at gateway)
 app.get('/members/:id', async (req, res) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
@@ -90,7 +87,7 @@ app.get('/members/:id', async (req, res) => {
     }
 });
 
-// PUT /members/:id - update one member profile
+// PUT /members/:id - update any member profile (admin only, enforced at gateway)
 app.put('/members/:id', async (req, res) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
@@ -110,7 +107,7 @@ app.put('/members/:id', async (req, res) => {
     }
 });
 
-// DELETE /members/:id - delete one member profile
+// DELETE /members/:id - remove member (admin only, enforced at gateway)
 app.delete('/members/:id', async (req, res) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) {

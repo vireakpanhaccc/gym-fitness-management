@@ -11,7 +11,7 @@ async function dbConnect() {
     // STEP-2 : ESTABLISH CONNECTION WITH MONGODB DATABASE THROUGH MONGOOSE
     await mongoose.connect(process.env.uri, clientOptions);
     await mongoose.connection.db.admin().command({ ping: 1 });
-    console.log("Pinged your deployment. Successfully connected to MongoDB!");
+    console.log("Identity service connected to MongoDB!");
   } catch (err) {
     console.error('MongoDB connection failed:', err);
     process.exit(1);

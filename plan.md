@@ -74,9 +74,9 @@ Postman / Client -----> |   Nginx Load Balancer (:80)     |
                    v                                         v
         +------------------------+          +----------------------------------+
         |        EC2 #2          |          |             EC2 #3              |
-        | member-service  :3002  |          | workout-service    :3004        |
-        | member-service  :3007  |          | membership-service :3005        |
-        | trainer-service :3003  |          | attendance-service :3006        |
+        | member-service  :3002  |          | member-service     :3007        |
+        | trainer-service :3003  |          | workout-service    :3004        |
+        | attendance-svc  :3006  |          | membership-service :3005        |
         +-----------+------------+          +----------------+-----------------+
                     |                                      |
                     +------------------+-------------------+
@@ -440,8 +440,8 @@ The assignment allows a maximum of 3/4 EC2 instances. This plan uses 3 EC2 insta
 | EC2 | Services | Ports |
 | --- | --- | --- |
 | EC2 #1 | Nginx, api-gateway, auth-service | `80`, `3000`, `3001` |
-| EC2 #2 | member-service instance 1, member-service instance 2, trainer-service | `3002`, `3007`, `3003` |
-| EC2 #3 | workout-service, membership-service, attendance-service | `3004`, `3005`, `3006` |
+| EC2 #2 | member-service instance 1, trainer-service, attendance-service | `3002`, `3003`, `3006` |
+| EC2 #3 | member-service instance 2, workout-service, membership-service | `3007`, `3004`, `3005` |
 | Atlas | MongoDB cloud database | Cloud managed |
 
 Security group plan:
@@ -486,14 +486,14 @@ The root `docker-compose.yaml` is for local testing before EC2 deployment.
 Nginx on EC2 #1 has two jobs:
 
 1. Public port `80` forwards client/Postman traffic to the API Gateway.
-2. Internal port `8081` load balances `member-service` across two running member-service instances on EC2 #2.
+2. Internal port `8081` load balances `member-service` across one instance on EC2 #2 and one instance on EC2 #3.
 
 This keeps the assignment rule correct: all public API calls still pass through the API Gateway. The gateway then forwards member routes to the internal load-balancer URL.
 
 ```nginx
 upstream member_service {
     server <EC2-2-IP>:3002;
-    server <EC2-2-IP>:3007;
+    server <EC2-3-IP>:3007;
 }
 
 server {
@@ -515,7 +515,7 @@ server {
 
 Load balancer proof:
 
-1. Run both member-service instances on EC2 #2.
+1. Run one member-service instance on EC2 #2 and one member-service instance on EC2 #3.
 2. Configure the API Gateway member-service target to use `http://localhost:8081`.
 3. Send repeated Postman requests to `/members` through public port `80`.
 4. Check logs for both member-service containers.
@@ -533,7 +533,7 @@ MEMBER_IP=<EC2-2-IP>
 TRAINER_IP=<EC2-2-IP>
 WORKOUT_IP=<EC2-3-IP>
 MEMBERSHIP_IP=<EC2-3-IP>
-ATTENDANCE_IP=<EC2-3-IP>
+ATTENDANCE_IP=<EC2-2-IP>
 MEMBER_LB_URL=http://localhost:8081
 ```
 
@@ -552,9 +552,17 @@ member-service:
 PORT=3002
 MONGO_URI=mongodb+srv://admin:<password>@gym-fitness-cluster.ayrgmkz.mongodb.net/member-db
 
+member-service second instance:
+PORT=3007
+MONGO_URI=mongodb+srv://admin:<password>@gym-fitness-cluster.ayrgmkz.mongodb.net/member-db
+
 trainer-service:
 PORT=3003
 MONGO_URI=mongodb+srv://admin:<password>@gym-fitness-cluster.ayrgmkz.mongodb.net/trainer-db
+
+attendance-service:
+PORT=3006
+MONGO_URI=mongodb+srv://admin:<password>@gym-fitness-cluster.ayrgmkz.mongodb.net/attendance-db
 
 workout-service:
 PORT=3004
@@ -563,10 +571,6 @@ MONGO_URI=mongodb+srv://admin:<password>@gym-fitness-cluster.ayrgmkz.mongodb.net
 membership-service:
 PORT=3005
 MONGO_URI=mongodb+srv://admin:<password>@gym-fitness-cluster.ayrgmkz.mongodb.net/membership-db
-
-attendance-service:
-PORT=3006
-MONGO_URI=mongodb+srv://admin:<password>@gym-fitness-cluster.ayrgmkz.mongodb.net/attendance-db
 ```
 
 ## 14. Build Order
