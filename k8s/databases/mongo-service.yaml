@@ -1,0 +1,15 @@
+# ClusterIP only - Mongo is never reachable from outside the cluster, only from the
+# 6 backend services via this Service's DNS name (mongo-service, used in app-secrets'
+# uri/MONGO_URI connection strings).
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo-service
+  namespace: gym-fitness
+spec:
+  type: ClusterIP
+  selector:
+    app: mongo
+  ports:
+    - port: 27017
+      targetPort: 27017

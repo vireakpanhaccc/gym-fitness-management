@@ -1,0 +1,7 @@
+# Dedicated namespace so the whole stack (Deployments, Services, ConfigMap/Secret,
+# PVCs, Ingress) can be torn down in one shot with `kubectl delete namespace gym-fitness`,
+# without touching kube-system or the ingress-nginx controller.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gym-fitness

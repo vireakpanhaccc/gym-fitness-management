@@ -1,0 +1,24 @@
+# Hand-written (static) PV, unlike mongo-pvc.yaml: Minikube's default dynamic
+# provisioner only ever creates ReadWriteOnce hostPath volumes, but this volume must be
+# ReadWriteMany - it's mounted simultaneously by identity-service (1 pod) and
+# member-service (2 pods), 3 containers across 2 services all appending to one file.
+# storageClassName: manual (not "standard") keeps it out of the dynamic provisioner's
+# reach so it only binds to shared-pvc.yaml's matching claim.
+#
+# type: DirectoryOrCreate makes Kubernetes create the host directory on the node if it
+# doesn't exist yet, avoiding a manual `minikube ssh -- mkdir` step before first apply.
+# Only valid on a single-node Minikube cluster - hostPath has no node affinity, so on a
+# multi-node cluster pods could land on a different node than the one holding this path.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: shared-log-pv
+spec:
+  capacity:
+    storage: 200Mi
+  accessModes:
+    - ReadWriteMany
+  storageClassName: manual
+  hostPath:
+    path: /mnt/data/gym-fitness/logs
+    type: DirectoryOrCreate

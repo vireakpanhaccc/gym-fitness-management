@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: membership-service
+  namespace: gym-fitness
+  labels:
+    app: membership-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: membership-service
+  template:
+    metadata:
+      labels:
+        app: membership-service
+    spec:
+      containers:
+        - name: membership-service
+          image: membership-service:local
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 3005
+          env:
+            - name: PORT
+              value: "3005"
+          envFrom:
+            - configMapRef:
+                name: app-config
+            - secretRef:
+                name: app-secrets

@@ -1,0 +1,15 @@
+# Bound to shared-log-pv by matching storageClassName (manual) + accessMode (RWX).
+# Mounted at /var/log/app by identity-service and member-service (see their Deployments
+# in k8s/microservices/) as claimName: shared-log-pvc.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-log-pvc
+  namespace: gym-fitness
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: manual
+  resources:
+    requests:
+      storage: 200Mi

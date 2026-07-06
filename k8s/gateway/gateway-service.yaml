@@ -1,0 +1,14 @@
+# ClusterIP - the Ingress routes to this Service; there is no NodePort/LoadBalancer
+# here or on any other Service, so external access is only possible through the Ingress.
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-service
+  namespace: gym-fitness
+spec:
+  type: ClusterIP
+  selector:
+    app: api-gateway
+  ports:
+    - port: 3000
+      targetPort: 3000

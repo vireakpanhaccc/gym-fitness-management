@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: attendance-service
+  namespace: gym-fitness
+spec:
+  type: ClusterIP
+  selector:
+    app: attendance-service
+  ports:
+    - port: 3006
+      targetPort: 3006

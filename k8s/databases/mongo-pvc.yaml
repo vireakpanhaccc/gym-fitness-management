@@ -1,0 +1,14 @@
+# Dynamic ReadWriteOnce PVC - only one Mongo pod ever attaches, so Minikube's default
+# "standard" StorageClass (dynamic hostPath provisioning) is sufficient; no hand-written
+# PV is needed here (unlike the shared-volume PV, which needs ReadWriteMany).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongo-pvc
+  namespace: gym-fitness
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

@@ -1,0 +1,49 @@
+# Single shared MongoDB instance replacing the external Atlas cluster, matching the
+# app's existing pattern of one shared database across all 6 services. A plain
+# Deployment (not a StatefulSet) is enough: there's no replica set, just one pod that
+# ever owns the PVC. strategy: Recreate is required - the default RollingUpdate would
+# try to schedule the new pod before killing the old one, and the new pod would hang
+# Pending trying to attach a ReadWriteOnce volume that's still attached to the old pod.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo
+  namespace: gym-fitness
+  labels:
+    app: mongo
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: mongo
+  template:
+    metadata:
+      labels:
+        app: mongo
+    spec:
+      containers:
+        - name: mongo
+          image: mongo:7.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 27017
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MONGO_INITDB_ROOT_USERNAME
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MONGO_INITDB_ROOT_PASSWORD
+          volumeMounts:
+            - name: mongo-data
+              mountPath: /data/db
+      volumes:
+        - name: mongo-data
+          persistentVolumeClaim:
+            claimName: mongo-pvc

@@ -1,0 +1,50 @@
+# replicas: 2 + a single Service (member-service-service.yaml) replaces the old nginx
+# upstream load-balancer - kube-proxy round-robins across both pods automatically.
+# INSTANCE is set via the Downward API to the pod's own name, so member-service's
+# existing per-request console.log("[INSTANCE] ...") line shows which of the two pods
+# handled each request - visible with:
+#   kubectl logs -n gym-fitness -l app=member-service --all-containers --prefix
+# Also mounts the shared-volume PVC alongside identity-service (see that Deployment's
+# comment) - proves multiple pods AND multiple services can share one file.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: member-service
+  namespace: gym-fitness
+  labels:
+    app: member-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: member-service
+  template:
+    metadata:
+      labels:
+        app: member-service
+    spec:
+      containers:
+        - name: member-service
+          image: member-service:local
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 3002
+          env:
+            - name: PORT
+              value: "3002"
+            - name: INSTANCE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          envFrom:
+            - configMapRef:
+                name: app-config
+            - secretRef:
+                name: app-secrets
+          volumeMounts:
+            - name: shared-logs
+              mountPath: /var/log/app
+      volumes:
+        - name: shared-logs
+          persistentVolumeClaim:
+            claimName: shared-log-pvc

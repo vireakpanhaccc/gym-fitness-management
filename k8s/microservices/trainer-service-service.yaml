@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: trainer-service
+  namespace: gym-fitness
+spec:
+  type: ClusterIP
+  selector:
+    app: trainer-service
+  ports:
+    - port: 3003
+      targetPort: 3003

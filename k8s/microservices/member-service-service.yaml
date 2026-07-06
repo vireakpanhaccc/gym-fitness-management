@@ -1,0 +1,14 @@
+# ClusterIP Service selecting both member-service replica pods - Kubernetes
+# load-balances across matching endpoints natively, replacing nginx's upstream block.
+apiVersion: v1
+kind: Service
+metadata:
+  name: member-service
+  namespace: gym-fitness
+spec:
+  type: ClusterIP
+  selector:
+    app: member-service
+  ports:
+    - port: 3002
+      targetPort: 3002

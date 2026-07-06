@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: membership-service
+  namespace: gym-fitness
+spec:
+  type: ClusterIP
+  selector:
+    app: membership-service
+  ports:
+    - port: 3005
+      targetPort: 3005

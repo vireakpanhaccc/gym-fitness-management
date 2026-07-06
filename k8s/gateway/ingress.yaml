@@ -1,0 +1,96 @@
+# Fanout DNS for aupp.com: every path rule targets gateway-service only - no rule ever
+# names identity-service/member-service/etc. directly, so only api-gateway is reachable
+# from outside the cluster (requirement: all other microservices must stay internal).
+# The path list mirrors api-gateway's own route prefixes (api-gateway/index.js) purely
+# for demonstrability; the trailing "/" rule alone is sufficient to route 100% of
+# traffic to the gateway, which does the real per-service fanout one hop downstream.
+#
+# Requires: minikube addons enable ingress (registers the "nginx" IngressClass).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gym-fitness-ingress
+  namespace: gym-fitness
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: aupp.com
+      http:
+        paths:
+          - path: /register
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway-service
+                port:
+                  number: 3000
+          - path: /login
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway-service
+                port:
+                  number: 3000
+          - path: /users
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway-service
+                port:
+                  number: 3000
+          - path: /members
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway-service
+                port:
+                  number: 3000
+          - path: /trainers
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway-service
+                port:
+                  number: 3000
+          - path: /workouts
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway-service
+                port:
+                  number: 3000
+          - path: /plans
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway-service
+                port:
+                  number: 3000
+          - path: /checkin
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway-service
+                port:
+                  number: 3000
+          - path: /checkout
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway-service
+                port:
+                  number: 3000
+          - path: /attendance
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway-service
+                port:
+                  number: 3000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway-service
+                port:
+                  number: 3000

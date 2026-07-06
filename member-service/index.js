@@ -1,5 +1,8 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 const dbConnect = require('./dbConnect');
 const Member = require('./models/member');
@@ -15,6 +18,20 @@ const instance = process.env.INSTANCE || 'member-service';
 // Request logger for load-balancer proof.
 app.use((req, _res, next) => {
     console.log(`[${instance}] ${req.method} ${req.originalUrl}`);
+    next();
+});
+
+// Shared-volume access log: identity-service and member-service both append to the
+// same mounted file (k8s/shared-volume/) to demonstrate multi-container/multi-service
+// access to shared data.
+const SHARED_LOG_FILE = path.join(process.env.LOG_DIR || '/var/log/app', 'access.log');
+app.use((req, res, next) => {
+    res.on('finish', () => {
+        const line = `${new Date().toISOString()} [member-service] [pod:${os.hostname()}] ${req.method} ${req.originalUrl} -> ${res.statusCode}\n`;
+        fs.appendFile(SHARED_LOG_FILE, line, (err) => {
+            if (err) console.error('Shared log write failed:', err.message);
+        });
+    });
     next();
 });
 
