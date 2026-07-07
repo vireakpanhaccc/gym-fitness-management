@@ -8,6 +8,32 @@ This repo already has a **working, completed EC2 + Docker Compose deployment** (
 
 Inspection of all 7 services + `nginx/` confirmed the current state everything below is designed against.
 
+## Pre-Demo Manual Checklist
+
+Do these before `kubectl apply -f k8s/` (or a fresh demo run):
+
+- [ ] Start Docker Desktop, then `minikube start` (no profile assumed running)
+- [ ] Build + load all 7 app images into Minikube's Docker daemon:
+      `eval $(minikube docker-env)`, then for each of
+      `api-gateway`, `identity-service`, `member-service`, `membership-service`,
+      `trainer-service`, `workout-service`, `attendance-service`:
+      `docker build -t <service>:local ./<service-dir>`
+      (`mongo:7.0` is pulled normally — no build needed)
+- [ ] `minikube addons enable ingress`, confirm the `ingress-nginx` controller pod is `Running`
+- [ ] Add `aupp.com` to `/etc/hosts`, pointed at `127.0.0.1`
+- [ ] Run `minikube tunnel` in its own terminal and keep it running for the whole demo
+      (macOS + docker driver: `minikube ip` is not directly routable, so this is required —
+      verify with `curl` before presenting, not during)
+- [ ] Apply in order, verifying each step (full detail in "Rollout order" below):
+      namespace → configmaps-secrets → databases (wait for Mongo `Ready`) →
+      microservices → gateway deployment+service → ingress.yaml → shared-volume
+
+Advisory (not blocking, worth knowing):
+- `configmaps-secrets.yaml` commits real plaintext demo credentials via `stringData` — fine for
+  this class deployment, rotate before any non-classroom reuse.
+- The shared-log PV uses a plain `hostPath` — only correct on a single-node cluster; don't run
+  `minikube start --nodes=2`.
+
 ## Confirmed inventory (from code inspection)
 
 | Service | Port | DB env var read | Notes |
