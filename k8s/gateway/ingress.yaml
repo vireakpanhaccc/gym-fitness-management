@@ -1,4 +1,4 @@
-# Fanout DNS for aupp.com: every path rule targets gateway-service only - no rule ever
+# Fanout DNS for auppgym.com: every path rule targets gateway-service only - no rule ever
 # names identity-service/member-service/etc. directly, so only api-gateway is reachable
 # from outside the cluster (requirement: all other microservices must stay internal).
 # The path list mirrors api-gateway's own route prefixes (api-gateway/index.js) purely
@@ -14,7 +14,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: aupp.com
+    - host: auppgym.com
       http:
         paths:
           - path: /register
