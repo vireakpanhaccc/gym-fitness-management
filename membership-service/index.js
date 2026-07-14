@@ -2,7 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 
 const dbConnect = require('./dbConnect');
-const Plan = require('./models/Plan');
+const Plan = require('./models/plan');
 require('dotenv').config();
 
 const app = express();
