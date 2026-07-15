@@ -11,7 +11,7 @@ This is the step-by-step script for demoing the gym-fitness-management microserv
 | 3 | **All client requests routed through the API Gateway** | Every backend Service is `ClusterIP`; the Ingress only ever targets `gateway-service` |
 | 4 | **Database connectivity** per service | Live `register`/`login` round-trip to MongoDB via `identity-service` |
 | 5 | **Fanout DNS** via a domain name | `Ingress` resource routes host `auppgym.com` → `gateway-service` |
-| 6 | **Shared Volume**, accessible from multiple containers | `identity-service` + `member-service` (2 pods) all write to one PVC-backed log file |
+| 6 | **Shared Volume**, accessible from multiple containers | `api-gateway` writes a log file and a `log-reader` sidecar reads it from the same in-pod volume |
 | 7 | Deployable/demoable on **Minikube** | The entire demo runs on a local Minikube cluster |
 
 ---
@@ -42,10 +42,9 @@ This is the step-by-step script for demoing the gym-fitness-management microserv
    kubectl -n gym-fitness wait --for=condition=Ready pod -l app=mongo --timeout=120s
 
    kubectl apply -f k8s/microservices/
-
    kubectl apply -f k8s/gateway/gateway-deployment.yaml -f k8s/gateway/gateway-service.yaml
 
-   kubectl apply -f k8s/shared-volume/
+   kubectl -n gym-fitness wait --for=condition=Ready pod -l app=api-gateway --timeout=60s
    kubectl -n gym-fitness wait --for=condition=Ready pod -l app=identity-service --timeout=60s
    kubectl -n gym-fitness wait --for=condition=Ready pod -l app=member-service --timeout=60s
    ```
@@ -124,17 +123,13 @@ curl http://auppgym.com/members -H "Authorization: Bearer $TOKEN"
 ```
 
 ### Requirement 6 — Shared Volume across multiple containers
-Open two terminal panes side by side:
+Open one terminal pane for the sidecar logs:
 ```bash
-# pane A
-kubectl -n gym-fitness exec deploy/identity-service -- cat /var/log/app/access.log
-
-# pane B
-kubectl -n gym-fitness exec deploy/member-service -- cat /var/log/app/access.log
+kubectl -n gym-fitness logs deploy/api-gateway -c log-reader
 ```
-> "Two different microservices, three different containers (identity-service's 1 pod + member-service's 2 pods) — all writing to and reading the exact same file, because they mount the same PersistentVolumeClaim."
+> "The API Gateway pod has two containers. The gateway container writes `/var/log/app/access.log`, and the `log-reader` container reads the same file through the shared Kubernetes `emptyDir` volume."
 
-For extra effect, fire one more request live and re-run both `cat` commands so a new line appears in both outputs at once:
+For extra effect, fire one more request live and watch a new line appear in the sidecar logs:
 ```bash
 curl http://auppgym.com/members -H "Authorization: Bearer $TOKEN"
 ```

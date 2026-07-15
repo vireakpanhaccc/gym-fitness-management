@@ -1,7 +1,3 @@
-# Mounts the shared-volume PVC (created in k8s/shared-volume/) at /var/log/app so this
-# service's access-log middleware can append to the same file member-service writes to.
-# Referencing shared-log-pvc here before that PVC exists is fine - Kubernetes leaves the
-# pod Pending on the volume until it's applied, it doesn't fail the Deployment.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -33,10 +29,3 @@ spec:
                 name: app-config
             - secretRef:
                 name: app-secrets
-          volumeMounts:
-            - name: shared-logs
-              mountPath: /var/log/app
-      volumes:
-        - name: shared-logs
-          persistentVolumeClaim:
-            claimName: shared-log-pvc

@@ -26,13 +26,13 @@ Do these before `kubectl apply -f k8s/` (or a fresh demo run):
       verify with `curl` before presenting, not during)
 - [ ] Apply in order, verifying each step (full detail in "Rollout order" below):
       namespace → configmaps-secrets → databases (wait for Mongo `Ready`) →
-      microservices → gateway deployment+service → ingress.yaml → shared-volume
+      microservices → gateway deployment+service → ingress.yaml
 
 Advisory (not blocking, worth knowing):
 - `configmaps-secrets.yaml` commits real plaintext demo credentials via `stringData` — fine for
   this class deployment, rotate before any non-classroom reuse.
-- The shared-log PV uses a plain `hostPath` — only correct on a single-node cluster; don't run
-  `minikube start --nodes=2`.
+- The shared log volume is an `emptyDir` inside the api-gateway pod, shared only by
+  the gateway container and its log-reader sidecar.
 
 ## Confirmed inventory (from code inspection)
 
@@ -51,7 +51,7 @@ All 7 have working Dockerfiles (`FROM node:22-alpine`, `EXPOSE <port>`, `CMD ["n
 ## Confirmed architecture decisions
 
 1. **Database**: Deploy a **self-hosted MongoDB in-cluster** (single shared instance, matching the current single-shared-cluster pattern) — replaces external Atlas entirely for the K8s deployment. `Deployment` (not StatefulSet — single replica, no replica set, `strategy.type: Recreate` to avoid dual-attach on the RWO PVC), + dynamic RWO PVC (Minikube's default `standard` StorageClass), + ClusterIP Service `mongo-service`. Credentials via Secret. Both `uri` and `MONGO_URI` keys populated with the same connection string in the Secret, to transparently satisfy the existing naming split across services with zero app-code changes.
-2. **Shared log volume**: Add a small file-logging middleware to **`identity-service` + `member-service`** (recommended pairing — member-service already runs 2 replicas, so this alone proves intra-service sharing; adding identity-service proves inter-service sharing too — 3 containers, 2 services, 1 file). Mount path `/var/log/app`, shared file `access.log`, log line format `<timestamp> [<service>] [pod:<hostname>] <method> <path> -> <status>` using `os.hostname()` (reliably equals the pod name in K8s) via a `fs.appendFile`/`createWriteStream({flags:'a'})` middleware — `O_APPEND` writes are atomic per line, no locking needed. PV: hand-written `hostPath`, `ReadWriteMany`, `storageClassName: manual`, `type: DirectoryOrCreate`. PVC: matching `manual` storageClass + RWX. (RWX is required here specifically because member-service's 2 replicas both mount it simultaneously.)
+2. **Shared log volume**: Add file-logging middleware to **`api-gateway` only**. The api-gateway pod has two containers: the gateway writes `/var/log/app/access.log`, and a BusyBox `log-reader` sidecar tails the same file. The volume is an in-pod Kubernetes `emptyDir`, proving shared data between two containers in one pod without touching backend services.
 3. **nginx**: Dropped entirely. Its public-facing job is replaced by a K8s **Ingress** (`ingress-nginx`, via `minikube addons enable ingress`) in front of api-gateway only. Its member-service load-balancing job is replaced by a plain ClusterIP **Service** in front of a `member-service` Deployment with `replicas: 2` — Kubernetes Services load-balance across matching pods natively, no code/config needed beyond that.
 4. **Exposure**: all 6 backend services + Mongo stay ClusterIP-only. Only `api-gateway`'s Service is referenced by the Ingress — this is structurally enforced by never writing an Ingress rule that names any other Service.
 5. **Fanout DNS**: domain `auppgym.com`, resolved via `/etc/hosts` → the reachable cluster IP (see Minikube gotcha below — NOT simply `minikube ip` on macOS/docker-driver). Because requirement #4 forbids exposing any service besides the gateway, "fanout" is expressed as multiple **path-based** Ingress rules that all point at `gateway-service:3000` (mirroring api-gateway's actual route prefixes: `/register`, `/login`, `/users`, `/members`, `/trainers`, `/workouts`, `/plans`, `/checkin`, `/checkout`, `/attendance`), plus a catch-all `/` rule to the same backend. The real multi-service fan-out happens one hop downstream, inside api-gateway itself, exactly as the assignment's parenthetical describes ("fans out to multiple services" via the gateway).
@@ -64,9 +64,9 @@ k8s/
   namespace.yaml                          # Namespace: gym-fitness
   configmaps-secrets.yaml                 # ConfigMap app-config + Secret app-secrets
   microservices/
-    identity-service-deployment.yaml      # + shared-log-pvc mount
+    identity-service-deployment.yaml
     identity-service-service.yaml
-    member-service-deployment.yaml        # replicas: 2, + shared-log-pvc mount, INSTANCE via Downward API
+    member-service-deployment.yaml        # replicas: 2, INSTANCE via Downward API
     member-service-service.yaml
     membership-service-deployment.yaml
     membership-service-service.yaml
@@ -81,12 +81,9 @@ k8s/
     mongo-pvc.yaml                        # RWO, dynamic (no mongo-pv.yaml needed)
     mongo-service.yaml                    # ClusterIP :27017
   gateway/
-    gateway-deployment.yaml
+    gateway-deployment.yaml                # api-gateway + log-reader sidecar sharing emptyDir logs
     gateway-service.yaml                  # ClusterIP :3000 — only Service the Ingress may reference
     ingress.yaml                          # host auppgym.com, path rules -> gateway-service
-  shared-volume/
-    shared-pv.yaml                        # hostPath, RWX, storageClassName: manual
-    shared-pvc.yaml                       # RWX, storageClassName: manual
 ```
 
 ### ConfigMap `app-config` (non-sensitive)
@@ -101,24 +98,24 @@ All 7 app Deployments get a blanket `envFrom: [configMapRef: app-config, secretR
 
 1. `namespace.yaml` → `configmaps-secrets.yaml`. Verify: `kubectl -n gym-fitness get configmap,secret`.
 2. `databases/`. Verify Mongo pod reaches `Running`/`Ready` **before** applying microservices — every service's `dbConnect.js` calls `process.exit(1)` on connection failure, so applying services before Mongo is ready causes a simultaneous `CrashLoopBackOff` across all 6.
-3. `microservices/`. Verify all 6 pods `Running`; identity-service/member-service will show pending volume mounts until step 6 (expected — Kubernetes tolerates a Deployment referencing a not-yet-existing PVC, unlike compose's imperative ordering).
+3. `microservices/`. Verify all 6 pods `Running`.
 4. `gateway/gateway-deployment.yaml` + `gateway-service.yaml` (not yet `ingress.yaml`). Verify via `kubectl port-forward svc/gateway-service 3000:3000` + a `curl`/Postman login call, before exposing anything externally.
 5. Enable `minikube addons enable ingress`, confirm `ingress-nginx` controller pod is `Running`, then apply `ingress.yaml`. Verify `kubectl get ingress` shows an address, then test through `auppgym.com` (see gotcha below).
-6. `shared-volume/`. Verify the two previously-pending pods flip to `Running`, then confirm interleaved log lines from both services/pods in the shared file.
+6. Confirm gateway log lines through `kubectl logs deploy/api-gateway -c log-reader`.
 
 ## Minikube-specific corrections and gotchas
 
 - **Correction**: no minikube profile is currently running on this machine (checked directly — `minikube status` fails because Docker Desktop itself isn't running: `dial unix .../docker.sock: connect: no such file or directory`). Start from scratch: start Docker Desktop → `minikube start` → `minikube addons enable ingress`. Don't assume an existing profile/IP.
 - **Ingress reachability on macOS + docker driver**: the docker-driver "node" is itself a container; its IP is typically not directly routable from the macOS host. Run `minikube tunnel` in a dedicated terminal during the demo and point `/etc/hosts`'s `auppgym.com` entry at `127.0.0.1` while it's running — verify with `curl` before the live demo, not during it.
 - **Image loading**: build all 7 app images against Minikube's own Docker daemon (`eval $(minikube docker-env)` then `docker build -t <service>:local ./<service-dir>`), and set `imagePullPolicy: Never` in every Deployment — otherwise Kubernetes tries (and fails) to pull from Docker Hub.
-- **hostPath + single node**: the shared-log PV only works because Minikube is single-node here; don't switch to `--nodes=2`, since plain `hostPath` PVs have no automatic node affinity and pods could silently get a fresh empty directory on a different node.
+- **Gateway log volume**: the shared log file is stored in an `emptyDir`, so it exists for the lifetime of the api-gateway pod and is intentionally shared only between the gateway container and the sidecar.
 - **Mongo image**: use `mongo:7.0` (supports Stable API v1, matching the `serverApi:{version:'1',...}` options already in every service's `dbConnect.js`). Verify early in step 2 — if a service crash-loops with an `apiStrict`/unsupported-command error, that's Mongoose's `autoIndex`/`createIndexes` hitting a Stable-API mismatch, not a K8s config problem.
 
 ## Team split mapping (per CLAUDE.md)
 
 - **Member A**: `databases/` + `microservices/` + `configmaps-secrets.yaml`, verifying each service connects to Mongo.
 - **Member B**: `gateway/` (Deployment, Service, Ingress), enabling the ingress addon, verifying only api-gateway is externally reachable.
-- **Member C**: `shared-volume/`, the 2-service logging middleware, full `minikube start` → `kubectl apply -f k8s/` → demo runbook.
+- **Member C**: gateway shared log middleware and log-reader sidecar, full `minikube start` → `kubectl apply -f k8s/` → demo runbook.
 
 ## Verification plan
 
@@ -126,4 +123,4 @@ All 7 app Deployments get a blanket `envFrom: [configMapRef: app-config, secretR
 - `kubectl exec` into any backend pod to confirm it's not reachable from outside (`ClusterIP`, no NodePort/LoadBalancer).
 - `curl http://auppgym.com/login` (via tunnel) end-to-end through Ingress → gateway → identity-service → Mongo.
 - `kubectl logs -l app=member-service --all-containers --prefix` showing both pod names handling `/members` traffic (load-balancer proof).
-- `kubectl exec` into identity-service or member-service pod, `tail /var/log/app/access.log`, confirm interleaved lines from both services (shared-volume proof).
+- `kubectl logs deploy/api-gateway -c log-reader`, confirm the sidecar reads gateway request lines from the shared log file (shared-volume proof).

@@ -29,7 +29,7 @@ This is a microservices-based gym/fitness management system, built for a Cloud N
 - **Database(s):** [e.g. Postgres/MySQL/MongoDB — one shared instance vs. one per service — TBD, confirm from each service's existing DB connection code]
 - **Service exposure:** all microservices = `ClusterIP` only. Only `api-gateway` is fronted by the `Ingress`.
 - **Ingress / Fanout DNS:** domain `auppgym.com`, resolved locally via `/etc/hosts` → `minikube ip`. Ingress controller = `ingress-nginx` (enabled via `minikube addons enable ingress`).
-- **Shared Volume:** [decide which 2+ services share a volume for logs — e.g. `api-gateway` + one backend service] mounted at a common path (e.g. `/var/log/app`) via a shared `PersistentVolumeClaim` (`ReadWriteMany`, `hostPath`-backed for Minikube).
+- **Shared Volume:** `api-gateway` pod uses two containers: the gateway writes `/var/log/app/access.log`, and a `log-reader` sidecar reads it from the same in-pod volume.
 - **Namespace:** [e.g. `gym-fitness` — confirm whether a dedicated namespace is required or default is fine]
 - **Config/Secrets:** DB credentials and connection strings go in `ConfigMap`/`Secret` objects, injected as env vars — not hardcoded in Deployment YAML.
 
@@ -49,19 +49,16 @@ k8s/
     gateway-deployment.yaml
     gateway-service.yaml
     ingress.yaml
-  shared-volume/
-    shared-pv.yaml
-    shared-pvc.yaml
 ```
 
 ## Team Split (3 members)
 - **Member A — Microservices & Databases:** Dockerfiles, Deployment + Service YAML per microservice, DB Deployments/StatefulSets + PVCs + Services, ConfigMaps/Secrets, verifying each service connects to its DB.
 - **Member B — API Gateway & Ingress (Fanout DNS):** Gateway Deployment/Service, Ingress YAML for `auppgym.com`, enabling Minikube ingress addon, verifying all traffic funnels through the gateway and backend services aren't directly reachable externally.
-- **Member C — Shared Volume, Logging & Integration/Demo:** Shared PV/PVC YAML, mounting into 2+ services, implementing/verifying shared log writes, full-stack integration testing (`minikube start` → `kubectl apply -f k8s/` → working demo), demo script/runbook for presentation.
+- **Member C — Shared Volume, Logging & Integration/Demo:** API Gateway shared-volume logging with a sidecar container, full-stack integration testing (`minikube start` → `kubectl apply -f k8s/` → working demo), demo script/runbook for presentation.
 
 ## Working Agreement for Claude Code Sessions
 - Always inspect existing code before generating YAML — never assume ports/env vars/framework.
-- Generate YAML **incrementally** in this order: ConfigMaps/Secrets → Databases → Microservices → API Gateway → Ingress → Shared Volume. Confirm each layer works (`kubectl get pods`, logs) before moving to the next.
+- Generate YAML **incrementally** in this order: ConfigMaps/Secrets → Databases → Microservices → API Gateway → Ingress. Confirm each layer works (`kubectl get pods`, logs) before moving to the next.
 - After generating each component, add a short rationale note (why this resource type, why this access mode, etc.) so each team member can explain their part to the professor individually.
 - Do not introduce Helm, Kustomize, or imperative `kubectl` commands as the final deliverable mechanism — YAML files applied via `kubectl apply -f` only, per assignment constraint.
 

@@ -1,6 +1,10 @@
 # The only microservice Deployment whose Service is ever referenced by the Ingress -
 # every other backend Service stays ClusterIP-only and unreachable from outside the
 # cluster (see gateway-service.yaml + ingress.yaml).
+#
+# The api-gateway Pod demonstrates shared-volume logging with two containers:
+# api-gateway writes /var/log/app/access.log, and log-reader tails the same file
+# from the same in-pod Kubernetes volume.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -32,3 +36,18 @@ spec:
                 name: app-config
             - secretRef:
                 name: app-secrets
+          volumeMounts:
+            - name: gateway-logs
+              mountPath: /var/log/app
+        - name: log-reader
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - mkdir -p /var/log/app && touch /var/log/app/access.log && tail -n +1 -f /var/log/app/access.log
+          volumeMounts:
+            - name: gateway-logs
+              mountPath: /var/log/app
+      volumes:
+        - name: gateway-logs
+          emptyDir: {}

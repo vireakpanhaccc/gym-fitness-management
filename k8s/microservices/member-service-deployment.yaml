@@ -4,8 +4,6 @@
 # existing per-request console.log("[INSTANCE] ...") line shows which of the two pods
 # handled each request - visible with:
 #   kubectl logs -n gym-fitness -l app=member-service --all-containers --prefix
-# Also mounts the shared-volume PVC alongside identity-service (see that Deployment's
-# comment) - proves multiple pods AND multiple services can share one file.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -41,10 +39,3 @@ spec:
                 name: app-config
             - secretRef:
                 name: app-secrets
-          volumeMounts:
-            - name: shared-logs
-              mountPath: /var/log/app
-      volumes:
-        - name: shared-logs
-          persistentVolumeClaim:
-            claimName: shared-log-pvc

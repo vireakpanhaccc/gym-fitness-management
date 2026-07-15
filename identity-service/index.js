@@ -2,9 +2,6 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
 
 const dbConnect = require('./dbConnect');
 const User = require('./models/user');
@@ -16,20 +13,6 @@ dbConnect();
 
 const JWT_SECRET = process.env.JWT_SECRET
 const port = process.env.PORT;
-
-// Shared-volume access log: identity-service and member-service both append to the
-// same mounted file (k8s/shared-volume/) to demonstrate multi-container/multi-service
-// access to shared data.
-const SHARED_LOG_FILE = path.join(process.env.LOG_DIR || '/var/log/app', 'access.log');
-app.use((req, res, next) => {
-    res.on('finish', () => {
-        const line = `${new Date().toISOString()} [identity-service] [pod:${os.hostname()}] ${req.method} ${req.originalUrl} -> ${res.statusCode}\n`;
-        fs.appendFile(SHARED_LOG_FILE, line, (err) => {
-            if (err) console.error('Shared log write failed:', err.message);
-        });
-    });
-    next();
-});
 
 // POST /register
 app.post('/register', async (req, res) => {

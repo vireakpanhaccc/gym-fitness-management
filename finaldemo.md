@@ -1,29 +1,41 @@
-# Final Demo Plan — Kubernetes Gym Fitness Project
+# Final Demo Showcase — Kubernetes Gym Fitness Project
 
-Use this plan to prove the project works before preparing final documentation.
+Use this file as the live presentation script. It follows the same structure as `docs.md`, but focuses on what to show on screen to prove the project is working.
 
-## Quick Requirement Map
+## 1. Demo Goal
 
-Show these points to the professor during the demo:
+Show that the Gym Fitness microservices application is fully deployed on Kubernetes with:
 
-| Final requirement | What to show |
+- YAML-only Kubernetes resources.
+- Multiple Pods.
+- API Gateway as the only public entry point.
+- MongoDB database connectivity.
+- Fanout DNS using `auppgym.com`.
+- Shared-volume logging using two containers inside the API Gateway Pod.
+- Working Postman API calls.
+
+## 2. Requirement Proof Map
+
+| Requirement | What to Show |
 |---|---|
-| Deploy microservices on Kubernetes using YAML only | `kubectl apply -f k8s/...` commands and `kubectl get pods -n gym-fitness -o wide` |
-| Multiple Pods as required | `member-service` has 2 running pods |
-| All client requests go through API Gateway | Ingress targets only `gateway-service`; backend Services are `ClusterIP` |
-| Database connectivity | Postman login returns JWT from MongoDB-backed `identity-service` |
-| Fanout DNS using domain name | Postman uses `http://auppgym.com/...` through Ingress |
-| Shared data in Kubernetes Volume | `identity-service` and `member-service` read the same `/var/log/app/access.log` |
-| Local Minikube deployment | `minikube status` and `kubectl get nodes` |
+| YAML-only deployment | `find k8s -type f | sort` and `kubectl apply -f ...` commands |
+| Multiple Pods | `kubectl get pods -n gym-fitness -o wide`; `member-service` has 2 Pods |
+| API Gateway routing | Ingress routes only to `gateway-service`; backend Services are `ClusterIP` |
+| Database connectivity | Login returns JWT from MongoDB-backed `identity-service` |
+| Fanout DNS | Postman/curl uses `http://auppgym.com/...` |
+| Shared Volume | `api-gateway` writes `access.log`; `log-reader` sidecar reads it |
+| Minikube deployment | `minikube status` and `kubectl get nodes` |
 
-## 1. Start Local Cluster
+## 3. Start Cluster and Build Images
+
+Start Minikube and enable Ingress:
 
 ```bash
 minikube start
 minikube addons enable ingress
 ```
 
-## 2. Build Images Inside Minikube
+Build all application images inside Minikube's Docker environment:
 
 ```bash
 eval $(minikube docker-env)
@@ -33,7 +45,14 @@ for svc in api-gateway identity-service member-service membership-service traine
 done
 ```
 
-## 3. Deploy Kubernetes YAML
+Show:
+
+- The image build commands complete successfully.
+- No external image registry is required for app images.
+
+## 4. Deploy Kubernetes YAML
+
+Apply the manifests:
 
 ```bash
 kubectl apply -f k8s/namespace.yaml
@@ -42,43 +61,92 @@ kubectl apply -f k8s/configmaps-secrets.yaml
 kubectl apply -f k8s/databases/
 kubectl -n gym-fitness wait --for=condition=Ready pod -l app=mongo --timeout=120s
 
-kubectl apply -f k8s/shared-volume/
 kubectl apply -f k8s/microservices/
 kubectl apply -f k8s/gateway/gateway-deployment.yaml
 kubectl apply -f k8s/gateway/gateway-service.yaml
 kubectl apply -f k8s/gateway/ingress.yaml
 ```
 
-Screenshot for documentation:
-
-- Terminal showing the YAML apply commands completed successfully.
-
-## 4. Confirm Pods and Services
+Show:
 
 ```bash
-kubectl get pods -n gym-fitness -o wide
-kubectl get svc -n gym-fitness
-kubectl get ingress -n gym-fitness
-kubectl get nodes
-minikube status
+find k8s -type f | sort
 ```
 
 Explain:
 
-- All services run in Kubernetes.
-- `member-service` has 2 pods.
-- All Services are `ClusterIP`, so backend services are internal.
-- Ingress only routes to `gateway-service`.
-- The cluster is running locally in Minikube.
+All Kubernetes resources are defined as YAML files under `k8s/`. The deployment does not use Helm, Kustomize, or manual `kubectl create` commands as the final deliverable.
 
-Screenshots for documentation:
+## 5. Validate Pods
 
-- `kubectl get pods -n gym-fitness -o wide`
-- `kubectl get svc -n gym-fitness`
-- `kubectl get ingress -n gym-fitness`
-- `minikube status` and `kubectl get nodes`
+Run:
 
-## 5. Point Domain to Minikube
+```bash
+kubectl get pods -n gym-fitness -o wide
+```
+
+Expected result:
+
+- `api-gateway` is running with `2/2` containers ready.
+- `member-service` has 2 running Pods.
+- Every backend service is running.
+- MongoDB is running.
+
+Explain:
+
+The API Gateway Pod has two containers:
+
+- `api-gateway`: handles requests and writes `/var/log/app/access.log`.
+- `log-reader`: reads the same file from the shared volume.
+
+## 6. Validate Services
+
+Run:
+
+```bash
+kubectl get svc -n gym-fitness
+```
+
+Expected result:
+
+- `gateway-service` is `ClusterIP`.
+- All backend services are also `ClusterIP`.
+- MongoDB is `ClusterIP`.
+
+Explain:
+
+No backend microservice is exposed directly outside the cluster. External traffic must go through Ingress and the API Gateway.
+
+## 7. Validate Ingress and Fanout DNS
+
+Run:
+
+```bash
+kubectl get ingress -n gym-fitness
+```
+
+Show the Ingress YAML:
+
+```bash
+cat k8s/gateway/ingress.yaml
+```
+
+Explain:
+
+The host is `auppgym.com`, and every path routes to `gateway-service:3000`. Ingress does not route directly to `identity-service`, `member-service`, or any other backend service.
+
+Traffic flow:
+
+```text
+Postman / Browser
+  -> http://auppgym.com/<path>
+  -> Ingress
+  -> gateway-service
+  -> api-gateway
+  -> correct backend service
+```
+
+## 8. Point Domain to Minikube
 
 In one terminal, keep this running:
 
@@ -92,9 +160,13 @@ In another terminal:
 echo "127.0.0.1 auppgym.com" | sudo tee -a /etc/hosts
 ```
 
-## 6. Seed First Admin User
+Explain:
 
-The first admin is created directly inside `identity-service` because gateway registration requires an admin token.
+On macOS with the Minikube Docker driver, `minikube tunnel` makes the Ingress reachable from the local machine. The `/etc/hosts` entry maps `auppgym.com` to localhost for the demo.
+
+## 9. Seed First Admin User
+
+The first admin is created directly through `identity-service` because gateway registration requires an existing admin token.
 
 ```bash
 kubectl -n gym-fitness exec deploy/identity-service -- wget -qO- \
@@ -103,7 +175,13 @@ kubectl -n gym-fitness exec deploy/identity-service -- wget -qO- \
   http://localhost:3001/register
 ```
 
-## 7. Prove Gateway + DNS + Database
+Expected result:
+
+```text
+User registered successfully
+```
+
+## 10. Postman Check 1 — Login Proves Gateway, DNS, and Database
 
 Postman request:
 
@@ -113,25 +191,33 @@ URL: http://auppgym.com/login
 Headers:
   Content-Type: application/json
 Body:
-  {
-    "email": "admin@gym.com",
-    "password": "admin123"
-  }
+{
+  "email": "admin@gym.com",
+  "password": "admin123"
+}
 ```
 
-Expected result: JSON response with a JWT token.
+Expected result:
 
-Screenshot for documentation:
-
-- Postman login request showing `http://auppgym.com/login` and JWT response.
+- HTTP success response.
+- JSON response contains a JWT token.
 
 Explain:
 
-`auppgym.com` -> Ingress -> API Gateway -> identity-service -> MongoDB.
+This proves:
 
-## 8. Prove Authenticated Gateway Routing
+- DNS works because the request uses `auppgym.com`.
+- Ingress works because traffic enters the cluster.
+- API Gateway works because `/login` is routed through `gateway-service`.
+- Database works because `identity-service` checks MongoDB and returns a token.
 
-In Postman, copy the `token` value from the login response.
+Screenshot to capture:
+
+- Postman login request and JWT response.
+
+## 11. Postman Check 2 — Authenticated Gateway Routing
+
+Copy the JWT token from the login response.
 
 Postman request:
 
@@ -139,85 +225,166 @@ Postman request:
 Method: GET
 URL: http://auppgym.com/members
 Headers:
-  Authorization: Bearer <paste-admin-token-here>
+  Authorization: Bearer <admin-token>
 ```
+
+Expected result:
+
+- HTTP success response.
+- Member list or empty array.
 
 Explain:
 
-The request enters through the domain and gateway, then the gateway verifies JWT/RBAC before routing to `member-service`.
+The request goes through:
 
-Screenshot for documentation:
+```text
+auppgym.com -> Ingress -> API Gateway -> member-service
+```
 
-- Postman authenticated request to `http://auppgym.com/members` with `Authorization: Bearer <token>`.
+The API Gateway validates the JWT and checks that the user has the `admin` role before forwarding to `member-service`.
 
-## 9. Prove Shared Volume
+Screenshot to capture:
 
-Generate traffic in Postman:
+- Postman authenticated `/members` request.
+
+## 12. Postman Check 3 — Fanout to Another Service
+
+Postman request:
+
+```text
+Method: GET
+URL: http://auppgym.com/trainers
+Headers:
+  Authorization: Bearer <admin-token>
+```
+
+Expected result:
+
+- HTTP success response.
+- Trainer list or empty array.
+
+Explain:
+
+This proves fanout to a different backend service. `/members` routes to `member-service`, while `/trainers` routes to `trainer-service`, but both requests enter through the same domain and gateway.
+
+Screenshot to capture:
+
+- Postman `/trainers` request and response.
+
+## 13. Validate Shared Volume Implementation
+
+Generate a request through Postman:
 
 ```text
 Method: GET
 URL: http://auppgym.com/members
 Headers:
-  Authorization: Bearer <paste-admin-token-here>
+  Authorization: Bearer <admin-token>
 ```
 
-Read the same log file from two different services:
+Then show the `log-reader` sidecar:
 
 ```bash
-kubectl -n gym-fitness exec deploy/identity-service -- cat /var/log/app/access.log
-kubectl -n gym-fitness exec deploy/member-service -- cat /var/log/app/access.log
+kubectl logs deploy/api-gateway -n gym-fitness -c log-reader
+```
+
+Expected result:
+
+The sidecar shows lines like:
+
+```text
+2026-07-15T10:00:00.000Z [api-gateway] [pod:api-gateway-xxxxx] GET /members -> 200 user=admin@gym.com role=admin
 ```
 
 Explain:
 
-Both services mount the same PVC and write/read the same `access.log` file.
+The API Gateway Pod has two containers sharing one Kubernetes `emptyDir` volume:
 
-Screenshots for documentation:
+| Container | Role |
+|---|---|
+| `api-gateway` | Writes `/var/log/app/access.log` |
+| `log-reader` | Reads/tails `/var/log/app/access.log` |
 
-- Postman request that generates log traffic.
-- Terminal showing `identity-service` reading `/var/log/app/access.log`.
-- Terminal showing `member-service` reading the same `/var/log/app/access.log`.
+This proves the volume requirement because multiple containers access the same log file through the same mounted volume.
 
-## 10. Prove Member Load Balancing
+Screenshot to capture:
 
-In Postman, send this request 5 to 10 times:
+- Terminal showing `kubectl logs deploy/api-gateway -c log-reader` with request log lines.
+
+## 14. Validate Member-Service Load Balancing
+
+Send this Postman request 5 to 10 times:
 
 ```text
 Method: GET
 URL: http://auppgym.com/members
 Headers:
-  Authorization: Bearer <paste-admin-token-here>
+  Authorization: Bearer <admin-token>
 ```
 
-Then check logs:
+Then run:
 
 ```bash
 kubectl -n gym-fitness logs -l app=member-service --all-containers --prefix
 ```
 
+Expected result:
+
+- Log lines appear from different `member-service` Pod names.
+
 Explain:
 
-There are two `member-service` pods, and Kubernetes Service load-balances traffic between them.
+`member-service` has 2 replicas. The Kubernetes `member-service` ClusterIP Service load-balances traffic between those Pods.
 
-Screenshot for documentation:
+Screenshot to capture:
 
-- Terminal logs showing requests handled by different `member-service` pod names.
+- Terminal showing logs from multiple `member-service` Pods.
 
-## 11. Show YAML Files
+## 15. Validate Database and Storage
+
+Run:
+
+```bash
+kubectl get pvc -n gym-fitness
+kubectl get pods -n gym-fitness -l app=mongo
+kubectl logs deploy/mongo -n gym-fitness
+```
+
+Expected result:
+
+- `mongo-pvc` exists.
+- MongoDB Pod is running.
+- Services can log in through MongoDB-backed authentication.
+
+Explain:
+
+MongoDB data is stored using `mongo-pvc`, mounted at `/data/db` inside the MongoDB container.
+
+## 16. Final YAML and Architecture Summary
+
+Show:
 
 ```bash
 find k8s -type f | sort
 ```
 
-Explain:
+Explain the important files:
 
-All Kubernetes resources are defined as YAML files under `k8s/`.
+| File | Purpose |
+|---|---|
+| `k8s/namespace.yaml` | Creates `gym-fitness` namespace |
+| `k8s/configmaps-secrets.yaml` | Stores service names, MongoDB URI, MongoDB credentials, and JWT secret |
+| `k8s/databases/mongo-deployment.yaml` | Runs MongoDB |
+| `k8s/databases/mongo-pvc.yaml` | Stores MongoDB data |
+| `k8s/microservices/*deployment.yaml` | Runs backend services |
+| `k8s/microservices/*service.yaml` | Creates internal ClusterIP Services |
+| `k8s/gateway/gateway-deployment.yaml` | Runs API Gateway plus `log-reader` sidecar |
+| `k8s/gateway/gateway-service.yaml` | Internal service for API Gateway |
+| `k8s/gateway/ingress.yaml` | Maps `auppgym.com` to `gateway-service` |
 
-Screenshot for documentation:
+## 17. Cleanup After Demo
 
-- Terminal showing the list of Kubernetes YAML files.
-
-## 12. Cleanup After Demo
+Only run cleanup after screenshots and grading are complete.
 
 ```bash
 kubectl delete namespace gym-fitness

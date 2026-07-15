@@ -1,12 +1,34 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const httpProxy = require('http-proxy');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
 app.use(express.json());
 const proxy = httpProxy.createProxyServer();
 const PORT = process.env.PORT;
+const LOG_DIR = process.env.LOG_DIR || '/var/log/app';
+const GATEWAY_LOG_FILE = path.join(LOG_DIR, 'access.log');
+
+try {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+} catch (err) {
+    console.error('Gateway log directory setup failed:', err.message);
+}
+
+app.use((req, res, next) => {
+    res.on('finish', () => {
+        const user = req.user ? ` user=${req.user.email} role=${req.user.role}` : '';
+        const line = `${new Date().toISOString()} [api-gateway] [pod:${os.hostname()}] ${req.method} ${req.originalUrl} -> ${res.statusCode}${user}\n`;
+        fs.appendFile(GATEWAY_LOG_FILE, line, (err) => {
+            if (err) console.error('Gateway shared log write failed:', err.message);
+        });
+    });
+    next();
+});
 
 // Forward verified user identity to downstream services
 proxy.on('proxyReq', (proxyReq, req) => {
