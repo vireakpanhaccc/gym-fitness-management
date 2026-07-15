@@ -24,12 +24,33 @@ This is the step-by-step script for demoing the gym-fitness-management microserv
    ```
 
 2. **Build and load all 7 app images** into Minikube's own Docker daemon (`imagePullPolicy: Never` means nothing gets pulled from a registry):
+
+   macOS/Linux:
    ```bash
    eval $(minikube docker-env)
    cd gym-fitness-management
    for svc in api-gateway identity-service member-service membership-service trainer-service workout-service attendance-service; do
      docker build -t "${svc}:local" "./${svc}"
    done
+   ```
+
+   Windows PowerShell:
+   ```powershell
+   minikube docker-env --shell powershell | Invoke-Expression
+   cd gym-fitness-management
+   $services = @(
+     "api-gateway",
+     "identity-service",
+     "member-service",
+     "membership-service",
+     "trainer-service",
+     "workout-service",
+     "attendance-service"
+   )
+
+   foreach ($svc in $services) {
+     docker build -t "${svc}:local" ".\$svc"
+   }
    ```
    > Use `${svc}:local` with braces if your shell is zsh — an unbraced `$svc:local` gets misparsed as a zsh history modifier (`:l` = lowercase) and silently builds the wrong tag.
 

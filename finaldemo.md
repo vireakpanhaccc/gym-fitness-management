@@ -35,7 +35,9 @@ minikube start
 minikube addons enable ingress
 ```
 
-Build all application images inside Minikube's Docker environment:
+Build all application images inside Minikube's Docker environment.
+
+macOS/Linux:
 
 ```bash
 eval $(minikube docker-env)
@@ -43,6 +45,26 @@ eval $(minikube docker-env)
 for svc in api-gateway identity-service member-service membership-service trainer-service workout-service attendance-service; do
   docker build -t "${svc}:local" "./${svc}"
 done
+```
+
+Windows PowerShell:
+
+```powershell
+minikube docker-env --shell powershell | Invoke-Expression
+
+$services = @(
+  "api-gateway",
+  "identity-service",
+  "member-service",
+  "membership-service",
+  "trainer-service",
+  "workout-service",
+  "attendance-service"
+)
+
+foreach ($svc in $services) {
+  docker build -t "${svc}:local" ".\$svc"
+}
 ```
 
 Show:

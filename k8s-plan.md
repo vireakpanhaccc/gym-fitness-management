@@ -14,10 +14,13 @@ Do these before `kubectl apply -f k8s/` (or a fresh demo run):
 
 - [ ] Start Docker Desktop, then `minikube start` (no profile assumed running)
 - [ ] Build + load all 7 app images into Minikube's Docker daemon:
-      `eval $(minikube docker-env)`, then for each of
+      macOS/Linux: `eval $(minikube docker-env)`, then for each of
       `api-gateway`, `identity-service`, `member-service`, `membership-service`,
       `trainer-service`, `workout-service`, `attendance-service`:
       `docker build -t <service>:local ./<service-dir>`
+      Windows PowerShell: `minikube docker-env --shell powershell | Invoke-Expression`,
+      then loop through the same services with
+      `docker build -t "${svc}:local" ".\$svc"`
       (`mongo:7.0` is pulled normally — no build needed)
 - [ ] `minikube addons enable ingress`, confirm the `ingress-nginx` controller pod is `Running`
 - [ ] Add `auppgym.com` to `/etc/hosts`, pointed at `127.0.0.1`
