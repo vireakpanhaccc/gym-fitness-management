@@ -10,7 +10,7 @@ This is the step-by-step script for demoing the gym-fitness-management microserv
 | 2 | May create **multiple Pods** as needed | `member-service` runs `replicas: 2` |
 | 3 | **All client requests routed through the API Gateway** | Every backend Service is `ClusterIP`; the Ingress only ever targets `gateway-service` |
 | 4 | **Database connectivity** per service | Live `register`/`login` round-trip to MongoDB via `identity-service` |
-| 5 | **Fanout DNS** via a domain name | `Ingress` resource routes host `aupp.com` → `gateway-service` |
+| 5 | **Fanout DNS** via a domain name | `Ingress` resource routes host `auppgym.com` → `gateway-service` |
 | 6 | **Shared Volume**, accessible from multiple containers | `identity-service` + `member-service` (2 pods) all write to one PVC-backed log file |
 | 7 | Deployable/demoable on **Minikube** | The entire demo runs on a local Minikube cluster |
 
@@ -59,7 +59,7 @@ This is the step-by-step script for demoing the gym-fitness-management microserv
 
 5. **Point the domain at your machine**:
    ```bash
-   echo "127.0.0.1 aupp.com" | sudo tee -a /etc/hosts
+   echo "127.0.0.1 auppgym.com" | sudo tee -a /etc/hosts
    ```
 
 6. **Start the tunnel in its own dedicated terminal window and leave it running** for the whole demo:
@@ -85,7 +85,7 @@ This is the step-by-step script for demoing the gym-fitness-management microserv
 ```bash
 find k8s -type f
 ```
-> "21 plain manifests under `k8s/`, applied with `kubectl apply -f k8s/`. No Helm charts, no imperative `kubectl create` commands."
+> "22 plain manifests under `k8s/`, applied with `kubectl apply -f k8s/`. No Helm charts, no imperative `kubectl create` commands."
 
 ### Requirement 2 — Multiple Pods
 ```bash
@@ -104,39 +104,39 @@ cat k8s/gateway/ingress.yaml
 
 ### Requirements 4 & 5 — Database connectivity + Fanout DNS (shown together)
 ```bash
-curl -X POST http://aupp.com/login \
+curl -X POST http://auppgym.com/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@gym.com","password":"admin123"}'
 ```
-> "That request went `aupp.com` → Ingress (host-based routing = the Fanout DNS piece) → `gateway-service` → `identity-service` → MongoDB, and came back with a signed JWT — proving both the domain routing and the DB round-trip in one call."
+> "That request went `auppgym.com` → Ingress (host-based routing = the Fanout DNS piece) → `gateway-service` → `identity-service` → MongoDB, and came back with a signed JWT — proving both the domain routing and the DB round-trip in one call."
 
 ```bash
 kubectl get ingress -n gym-fitness
 ```
-> "The Ingress binds the host `aupp.com` to an address — that's the domain-based fanout entry point."
+> "The Ingress binds the host `auppgym.com` to an address — that's the domain-based fanout entry point."
 
 Optional — register a second user and hit an authenticated route to show a write path too:
 ```bash
-TOKEN=$(curl -s -X POST http://aupp.com/login -H "Content-Type: application/json" \
+TOKEN=$(curl -s -X POST http://auppgym.com/login -H "Content-Type: application/json" \
   -d '{"email":"admin@gym.com","password":"admin123"}' | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
 
-curl http://aupp.com/members -H "Authorization: Bearer $TOKEN"
+curl http://auppgym.com/members -H "Authorization: Bearer $TOKEN"
 ```
 
 ### Requirement 6 — Shared Volume across multiple containers
 Open two terminal panes side by side:
 ```bash
 # pane A
-kubectl exec deploy/identity-service -- cat /var/log/app/access.log
+kubectl -n gym-fitness exec deploy/identity-service -- cat /var/log/app/access.log
 
 # pane B
-kubectl exec deploy/member-service -- cat /var/log/app/access.log
+kubectl -n gym-fitness exec deploy/member-service -- cat /var/log/app/access.log
 ```
 > "Two different microservices, three different containers (identity-service's 1 pod + member-service's 2 pods) — all writing to and reading the exact same file, because they mount the same PersistentVolumeClaim."
 
 For extra effect, fire one more request live and re-run both `cat` commands so a new line appears in both outputs at once:
 ```bash
-curl http://aupp.com/members -H "Authorization: Bearer $TOKEN"
+curl http://auppgym.com/members -H "Authorization: Bearer $TOKEN"
 ```
 
 ### Requirement 7 — Runs on Minikube
@@ -150,13 +150,13 @@ kubectl get nodes
 
 ## Part 3 — Troubleshooting during the demo
 
-- **`aupp.com` suddenly stops resolving** → the `minikube tunnel` window was closed or went to sleep. Restart it in its dedicated terminal.
-- **Testing in a browser instead of curl** → don't navigate directly to `/login` — it's a POST-only route and a browser address bar only sends GET, so you'll see "Cannot GET /login" (expected, not a bug). Also disable "Secure DNS" / DNS-over-HTTPS in the browser settings first — otherwise the browser resolves `aupp.com` via the real public internet instead of your `/etc/hosts` override.
+- **`auppgym.com` suddenly stops resolving** → the `minikube tunnel` window was closed or went to sleep. Restart it in its dedicated terminal.
+- **Testing in a browser instead of curl** → don't navigate directly to `/login` — it's a POST-only route and a browser address bar only sends GET, so you'll see "Cannot GET /login" (expected, not a bug). Also disable "Secure DNS" / DNS-over-HTTPS in the browser settings first — otherwise the browser resolves `auppgym.com` via the real public internet instead of your `/etc/hosts` override.
 - **A pod is `CrashLoopBackOff` or `Pending`** → `kubectl logs <pod>` and `kubectl describe pod <pod>` live; showing visible debugging is fine, don't panic-restart.
 - **Tunnel/sudo not available on the demo machine** → fallback that doesn't need the tunnel:
   ```bash
   kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 8080:80
-  curl -H "Host: aupp.com" http://localhost:8080/login -X POST \
+  curl -H "Host: auppgym.com" http://localhost:8080/login -X POST \
     -H "Content-Type: application/json" -d '{"email":"admin@gym.com","password":"admin123"}'
   ```
 
