@@ -8,15 +8,17 @@ The application is composed of independent Node.js/Express services. Each servic
 
 ## 2. Objective
 
-The objective of this deployment is to demonstrate a working Kubernetes-based microservices architecture that satisfies the project requirements:
+The objective of this project is to transform the Gym Fitness application from a collection of containerized services into a complete Kubernetes-based microservices deployment. The final system is designed to show how independent services can be deployed, discovered, secured, routed, scaled, and validated inside a local Kubernetes cluster while still presenting one controlled entry point to external clients.
 
-- Deploy all services on Kubernetes using YAML files.
-- Use multiple Pods where needed.
-- Route all client requests through the API Gateway.
-- Connect services to an in-cluster MongoDB database.
-- Configure fanout DNS using `auppgym.com`.
-- Demonstrate Kubernetes volume sharing using two containers inside the API Gateway Pod.
-- Validate the deployment using `kubectl`, curl/Postman, and service logs.
+Specifically, this deployment aims to:
+
+- Package each application component as an independent Kubernetes workload with its own Deployment and internal Service.
+- Enforce a gateway-first architecture where every client request enters through `auppgym.com`, reaches the Kubernetes Ingress, and is forwarded only to the API Gateway.
+- Keep backend microservices private inside the cluster by exposing them only through `ClusterIP` Services.
+- Use the API Gateway as the central routing and security layer for JWT verification, role-based access control, and request fanout to the correct backend service.
+- Replace the external database dependency with an in-cluster MongoDB deployment backed by persistent storage.
+- Demonstrate Kubernetes multi-container volume sharing through the API Gateway Pod, where one container writes request logs and a sidecar container reads the same log file.
+- Provide a reproducible demo workflow using YAML manifests, Minikube, `kubectl`, Postman, and service logs to prove that networking, authentication, database access, fanout routing, load balancing, and volume sharing all work together.
 
 ## 3. Technologies/Tools
 
@@ -282,7 +284,6 @@ kubectl logs -n gym-fitness -l app=member-service --all-containers --prefix
 
 Add the final Postman screenshots in this section after running the demo.
 
-Recommended screenshots:
 
 1. Login request
 
@@ -295,7 +296,6 @@ Body:
   "password": "admin123"
 }
 Expected result: JWT token returned.
-Screenshot: [Insert login screenshot here]
 ```
 
 2. Authenticated member request
@@ -306,7 +306,6 @@ URL: http://auppgym.com/members
 Header:
 Authorization: Bearer <admin-token>
 Expected result: Member list or an empty array.
-Screenshot: [Insert members screenshot here]
 ```
 
 3. Gateway route validation
@@ -317,7 +316,6 @@ URL: http://auppgym.com/trainers
 Header:
 Authorization: Bearer <token>
 Expected result: Trainer API response.
-Screenshot: [Insert trainers screenshot here]
 ```
 
 4. Shared volume log proof
@@ -328,7 +326,6 @@ kubectl logs deploy/api-gateway -n gym-fitness -c log-reader
 
 Expected result:
 The log-reader sidecar displays request lines written by the api-gateway container.
-Screenshot: [Insert terminal screenshot here]
 ```
 
 ## 11. Volume Implementation
